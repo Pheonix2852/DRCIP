@@ -1,0 +1,573 @@
+// Database Schema — Prisma schema for DRCIP
+// See docs/04_Database_Schema.md for authoritative spec
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String    @id @default(uuid())
+  publicId     String    @unique
+  fullName     String
+  email        String    @unique
+  passwordHash String
+  role         UserRole
+  isActive     Boolean   @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  createdBy    String? // FK to users (admin who created)
+
+  // Relations
+  teamLeader      FieldTeam?
+  incidents       Incident[]
+  assignments     Assignment[]
+  reviews         AllocationRecommendation[]
+  auditLogs       AuditLog[]
+  notifications   Notification[]
+  chatSessions    ChatSession[]
+  AssignmentEvent AssignmentEvent[]
+
+  @@index([publicId])
+  @@index([email])
+}
+
+enum UserRole {
+  CITIZEN
+  FIELD_OFFICER
+  DISASTER_COORDINATOR
+  ADMINISTRATOR
+}
+
+model FieldTeam {
+  id                String   @id @default(uuid())
+  publicId          String   @unique
+  name              String
+  leaderUserId      String   @unique // FK to users, one-to-one
+  status            String
+  capabilityProfile Json     @default("{}")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relations
+  leader      User              @relation(fields: [leaderUserId], references: [id])
+  members     FieldTeamMember[]
+  assignments Assignment[]
+  resources   Resource[]
+
+  @@index([publicId])
+  @@index([leaderUserId])
+}
+
+model FieldTeamMember {
+  id               String   @id @default(uuid())
+  teamId           String
+  memberName       String
+  memberRole       String
+  contactReference String?
+  isActive         Boolean  @default(true)
+  joinedAt         DateTime @default(now())
+
+  // Relations
+  team FieldTeam @relation(fields: [teamId], references: [id])
+
+  @@index([teamId])
+}
+
+model Incident {
+  id                     String         @id @default(uuid())
+  publicId               String         @unique
+  reporterUserId         String
+  disasterType           DisasterType
+  description            String
+  peopleAffected         Int
+  emergencyContactNumber String
+  location               Unsupported("geography(Point,4326)")? // PostGIS Point; written via raw SQL
+  addressText            String?
+  state                  String?
+  district               String?
+  responseZoneId         String?
+  predictedSeverity      SeverityLevel?
+  confirmedSeverity      SeverityLevel?
+  status                 IncidentStatus
+  resolvedAt             DateTime?
+  createdAt              DateTime       @default(now())
+  updatedAt              DateTime       @updatedAt
+
+  // Relations
+  reporter            User                       @relation(fields: [reporterUserId], references: [id])
+  responseZone        ResponseZone?              @relation(fields: [responseZoneId], references: [id])
+  media               IncidentMedia[]
+  severityPredictions SeverityPrediction[]
+  recommendations     AllocationRecommendation[]
+  assignments         Assignment[]
+  notifications       Notification[]
+  auditLogs           AuditLog[]
+
+  @@index([publicId])
+  @@index([status])
+  @@index([disasterType])
+  @@index([createdAt])
+  @@index([reporterUserId])
+}
+
+enum DisasterType {
+  FLOOD
+  CYCLONE
+  FIRE
+  EARTHQUAKE
+  BUILDING_COLLAPSE
+  MEDICAL_EMERGENCY
+  ROAD_BLOCKAGE
+  LANDSLIDE
+}
+
+enum SeverityLevel {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum IncidentStatus {
+  REPORTED
+  TRIAGE_PENDING
+  IN_RESPONSE
+  RESOLVED
+}
+
+model IncidentMedia {
+  id              String    @id @default(uuid())
+  incidentId      String
+  mediaType       MediaType
+  provider        String
+  providerAssetId String
+  secureUrl       String
+  thumbnailUrl    String?
+  mimeType        String
+  byteSize        BigInt
+  width           Int?
+  height          Int?
+  durationSeconds Int?
+  checksum        String?
+  createdAt       DateTime  @default(now())
+
+  // Relations
+  incident Incident @relation(fields: [incidentId], references: [id])
+
+  @@index([incidentId])
+}
+
+enum MediaType {
+  IMAGE
+  VIDEO
+}
+
+model Resource {
+  id                String         @id @default(uuid())
+  publicId          String         @unique
+  resourceType      ResourceType
+  name              String
+  status            ResourceStatus
+  quantity          Decimal        @db.Decimal(12, 2)
+  unit              String?
+  capacity          Decimal?
+  capabilityProfile Json           @default("{}")
+  location          Json? // PostGIS Point
+  contactReference  String?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  // Relations
+  teamId      String?
+  team        FieldTeam?       @relation(fields: [teamId], references: [id])
+  assignments AssignmentItem[]
+
+  @@index([publicId])
+  @@index([resourceType])
+  @@index([status])
+  @@index([teamId])
+}
+
+enum ResourceType {
+  AMBULANCE
+  RESCUE_TEAM
+  FOOD
+  MEDICAL_KIT
+  VEHICLE
+  RELIEF_TRUCK
+  SHELTER
+  VOLUNTEER
+  PERSONNEL
+}
+
+enum ResourceStatus {
+  AVAILABLE
+  ASSIGNED
+  DEPLOYED
+  UNAVAILABLE
+  MAINTENANCE
+}
+
+model ResponseZone {
+  id        String   @id @default(uuid())
+  publicId  String   @unique
+  name      String
+  geometry  Json // PostGIS Polygon
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  incidents Incident[]
+  forecasts DemandForecast[]
+
+  @@index([publicId])
+}
+
+model Shelter {
+  id               String   @id @default(uuid())
+  publicId         String   @unique
+  name             String
+  location         Json // PostGIS Point
+  totalCapacity    Int
+  currentOccupancy Int      @default(0)
+  status           String   @default("AVAILABLE")
+  capabilities     Json     @default("{}")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  // Relations
+  assignments AssignmentItem[]
+
+  @@index([publicId])
+}
+
+model SeverityPrediction {
+  id               String           @id @default(uuid())
+  publicId         String           @unique
+  incidentId       String
+  severity         SeverityLevel?
+  confidence       Decimal?
+  modelVersion     String?
+  predictionId     String?
+  predictionStatus PredictionStatus
+  explanation      Json?
+  inputReference   Json?
+  generatedAt      DateTime?
+  createdAt        DateTime         @default(now())
+
+  // Relations
+  incident Incident @relation(fields: [incidentId], references: [id])
+
+  @@index([incidentId])
+  @@index([publicId])
+}
+
+enum PredictionStatus {
+  SUCCESS
+  UNAVAILABLE
+  ERROR
+}
+
+model DemandForecast {
+  id                   String       @id @default(uuid())
+  publicId             String       @unique
+  responseZoneId       String?
+  incidentId           String?
+  forecastHorizonStart DateTime
+  forecastHorizonEnd   DateTime
+  resourceType         ResourceType
+  quantity             Decimal
+  lowerBound           Decimal?
+  upperBound           Decimal?
+  qualityIndicator     Decimal?
+  providerVersion      String
+  assumptions          Json?
+  generatedAt          DateTime
+  createdAt            DateTime     @default(now())
+
+  // Relations
+  responseZone ResponseZone? @relation(fields: [responseZoneId], references: [id])
+
+  @@index([incidentId])
+  @@index([responseZoneId])
+  @@index([publicId])
+}
+
+model AllocationRecommendation {
+  id                   String                 @id @default(uuid())
+  publicId             String                 @unique
+  incidentId           String
+  recommendationStatus RecommendationDecision
+  optimizerVersion     String
+  objectiveSummary     Json?
+  constraintSummary    Json?
+  generatedAt          DateTime
+  reviewedAt           DateTime?
+  reviewedBy           String? // FK to users
+  decisionReason       String?
+  createdAt            DateTime               @default(now())
+
+  // Relations
+  incident   Incident                       @relation(fields: [incidentId], references: [id])
+  reviewer   User?                          @relation(fields: [reviewedBy], references: [id])
+  items      AllocationRecommendationItem[]
+  assignment Assignment?
+
+  @@index([incidentId])
+  @@index([publicId])
+}
+
+enum RecommendationDecision {
+  PENDING
+  APPROVED
+  MODIFIED
+  REJECTED
+}
+
+model AllocationRecommendationItem {
+  id               String       @id @default(uuid())
+  recommendationId String
+  resourceType     ResourceType
+  resourceId       String?
+  teamId           String?
+  shelterId        String?
+  quantity         Decimal
+  rank             Int?
+  travelMinutes    Decimal?
+  rationale        String?
+
+  // Relations
+  recommendation AllocationRecommendation @relation(fields: [recommendationId], references: [id])
+
+  @@index([recommendationId])
+}
+
+model Assignment {
+  id               String           @id @default(uuid())
+  publicId         String           @unique
+  incidentId       String
+  recommendationId String?          @unique
+  assignedBy       String
+  status           AssignmentStatus
+  assignedAt       DateTime
+  startedAt        DateTime?
+  completedAt      DateTime?
+  notes            String?
+  createdAt        DateTime         @default(now())
+
+  // Relations
+  incident       Incident                  @relation(fields: [incidentId], references: [id])
+  recommendation AllocationRecommendation? @relation(fields: [recommendationId], references: [id])
+  assigner       User                      @relation(fields: [assignedBy], references: [id])
+  items          AssignmentItem[]
+  events         AssignmentEvent[]
+  notifications  Notification[]
+  FieldTeam      FieldTeam?                @relation(fields: [fieldTeamId], references: [id])
+  fieldTeamId    String?
+
+  @@index([incidentId])
+  @@index([publicId])
+  @@index([recommendationId])
+}
+
+enum AssignmentStatus {
+  PENDING
+  APPROVED
+  ASSIGNED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+model AssignmentItem {
+  id           String       @id @default(uuid())
+  assignmentId String
+  resourceType ResourceType
+  resourceId   String?
+  teamId       String?
+  shelterId    String?
+  quantity     Decimal
+
+  // Relations
+  assignment Assignment @relation(fields: [assignmentId], references: [id])
+  resource   Resource?  @relation(fields: [resourceId], references: [id])
+  shelter    Shelter?   @relation(fields: [shelterId], references: [id])
+
+  @@index([assignmentId])
+}
+
+model AssignmentEvent {
+  id           String   @id @default(uuid())
+  assignmentId String
+  eventType    String
+  actorUserId  String
+  notes        String?
+  occurredAt   DateTime @default(now())
+
+  // Relations
+  assignment Assignment @relation(fields: [assignmentId], references: [id])
+  actor      User       @relation(fields: [actorUserId], references: [id])
+
+  @@index([assignmentId])
+}
+
+model Notification {
+  id               String                     @id @default(uuid())
+  publicId         String                     @unique
+  recipientUserId  String
+  incidentId       String?
+  assignmentId     String?
+  channel          NotificationChannel
+  notificationType String
+  payload          Json
+  deliveryStatus   NotificationDeliveryStatus
+  sentAt           DateTime?
+  createdAt        DateTime                   @default(now())
+
+  // Relations
+  recipient  User        @relation(fields: [recipientUserId], references: [id])
+  incident   Incident?   @relation(fields: [incidentId], references: [id])
+  assignment Assignment? @relation(fields: [assignmentId], references: [id])
+
+  @@index([recipientUserId])
+  @@index([publicId])
+}
+
+enum NotificationChannel {
+  IN_APP
+  EMAIL
+  SMS
+}
+
+enum NotificationDeliveryStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+model WeatherObservation {
+  id            String   @id @default(uuid())
+  latitude      Decimal  @db.Decimal(10, 8)
+  longitude     Decimal  @db.Decimal(11, 8)
+  observedAt    DateTime
+  source        String
+  temperature   Decimal?
+  precipitation Decimal?
+  windSpeed     Decimal?
+  humidity      Decimal?
+  rawPayload    Json?
+  retrievedAt   DateTime
+
+  @@index([latitude, longitude])
+}
+
+model KnowledgeBaseDocument {
+  id                 String    @id @default(uuid())
+  publicId           String    @unique
+  title              String
+  sourceOrganization String?
+  documentType       String
+  publicationDate    DateTime?
+  version            String?
+  sourceUrl          String
+  license            String?
+  authorityLevel     String
+  approvedForRag     Boolean   @default(false)
+  downloadedAt       DateTime
+  checksum           String
+  storageUri         String
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  // Relations
+  chunks KnowledgeBaseChunk[]
+
+  @@index([publicId])
+}
+
+model KnowledgeBaseChunk {
+  id            String   @id @default(uuid())
+  documentId    String
+  chunkIndex    Int
+  pageNumber    Int?
+  sectionTitle  String?
+  textHash      String
+  qdrantPointId String
+  metadata      Json
+  createdAt     DateTime @default(now())
+
+  // Relations
+  document KnowledgeBaseDocument @relation(fields: [documentId], references: [id])
+
+  @@index([documentId])
+  @@index([qdrantPointId])
+}
+
+model ChatSession {
+  id        String   @id @default(uuid())
+  publicId  String   @unique
+  userId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  user     User          @relation(fields: [userId], references: [id])
+  messages ChatMessage[]
+
+  @@index([publicId])
+  @@index([userId])
+}
+
+model ChatMessage {
+  id         String   @id @default(uuid())
+  sessionId  String
+  role       ChatRole
+  content    String
+  citations  Json?
+  toolCalls  Json?
+  ragVersion String?
+  createdAt  DateTime @default(now())
+
+  // Relations
+  session ChatSession @relation(fields: [sessionId], references: [id])
+
+  @@index([sessionId])
+}
+
+enum ChatRole {
+  USER
+  ASSISTANT
+  TOOL
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  actorUserId String?
+  action      String
+  entityType  String
+  entityId    String?
+  beforeState Json?
+  afterState  Json?
+  metadata    Json?
+  occurredAt  DateTime @default(now())
+
+  // Relations
+  actor    User?     @relation(fields: [actorUserId], references: [id])
+  incident Incident? @relation(fields: [entityId], references: [id])
+
+  @@index([action])
+  @@index([entityType, entityId])
+  @@index([occurredAt])
+}
+
+model PublicIdSequence {
+  prefix       String @id
+  currentValue Int
+}

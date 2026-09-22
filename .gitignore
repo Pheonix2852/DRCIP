@@ -1,7 +1,7 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 # dependencies
-/node_modules
+node_modules/
 /.pnp
 .pnp.js
 
@@ -9,11 +9,10 @@
 /coverage
 
 # next.js
-/.next/
-/out/
-
-# production
-/build
+dist/
+build/
+.next/
+out/
 
 # misc
 .DS_Store
@@ -23,10 +22,25 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+*.log
 
-# local env files
-.env*.local
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+env/
+
+# Environment files
 .env
+.env.*
+!.env.example
 
 # vercel
 .vercel
@@ -40,3 +54,9 @@ next-env.d.ts
 AGENTS.md
 =======
 >>>>>>> de94cc632e5b183c701e926000dfd619491e61dc
+# Local verification artifacts
+Test Image.jpg
+backend/prisma/migrations/runtime-*.json
+backend/prisma/migrations/trace_body.json
+Test Users.txt
+
