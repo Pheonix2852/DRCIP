@@ -12,17 +12,11 @@ export function AdminDashboard() {
   return <div className="max-w-6xl mx-auto">Admin Dashboard - Placeholder</div>
 }
 
-export function ResourcesPage() {
-  return <div className="max-w-6xl mx-auto">Resource Management Page - Placeholder</div>
-}
+export { ResourcesPage } from './ResourcesPage'
 
-export function TeamsPage() {
-  return <div className="max-w-6xl mx-auto">Field Team Management Page - Placeholder</div>
-}
+export { TeamsPage } from './TeamsPage'
 
-export function SheltersPage() {
-  return <div className="max-w-6xl mx-auto">Shelter Management Page - Placeholder</div>
-}
+export { SheltersPage } from './SheltersPage'
 
 export function AssignmentsPage() {
   return <div className="max-w-6xl mx-auto">Assignments Page - Placeholder</div>
@@ -40,9 +34,7 @@ export function AllocateReviewPage() {
   return <div className="max-w-6xl mx-auto">Allocation Recommendation Review Page - Placeholder</div>
 }
 
-export function TeamStatusPage() {
-  return <div className="max-w-6xl mx-auto">Team Status Page - Placeholder</div>
-}
+export { TeamStatusPage } from './FieldTeamPage'
 
 export function FieldUpdatePage() {
   return <div className="max-w-6xl mx-auto">Field Update Page - Placeholder</div>

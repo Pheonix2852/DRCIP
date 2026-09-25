@@ -64,6 +64,23 @@ export const RESOURCE_STATUSES = {
 
 export type ResourceStatus = (typeof RESOURCE_STATUSES)[keyof typeof RESOURCE_STATUSES];
 
+export const TEAM_STATUSES = {
+  ACTIVE: 'ACTIVE',
+  DEPLOYED: 'DEPLOYED',
+  UNAVAILABLE: 'UNAVAILABLE',
+  MAINTENANCE: 'MAINTENANCE',
+} as const;
+
+export type TeamStatus = (typeof TEAM_STATUSES)[keyof typeof TEAM_STATUSES];
+
+export const SHELTER_STATUSES = {
+  AVAILABLE: 'AVAILABLE',
+  FULL: 'FULL',
+  UNAVAILABLE: 'UNAVAILABLE',
+} as const;
+
+export type ShelterStatus = (typeof SHELTER_STATUSES)[keyof typeof SHELTER_STATUSES];
+
 export const ASSIGNMENT_STATUSES = {
   PENDING: 'PENDING',
   APPROVED: 'APPROVED',

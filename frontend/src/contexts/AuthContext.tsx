@@ -42,6 +42,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const navigate = useNavigate()
 
   useEffect(() => {
+    mountedRef.current = true
     const stored = localStorage.getItem('drcip-auth')
     if (stored) {
       try {

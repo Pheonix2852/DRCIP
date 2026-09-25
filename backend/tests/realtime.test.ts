@@ -2,7 +2,7 @@ import { beforeAll, afterAll, describe, it, expect } from 'vitest'
 import http from 'node:http'
 import WebSocket from 'ws'
 import prisma from '../src/lib/prisma'
-import { testApp, createAuthedUser, authHeader, truncateTables } from './helpers'
+import { testApp, createAuthedUser, authHeader, truncateTables, createFieldOfficer } from './helpers'
 import { WebSocketService } from '../src/services/WebSocketService'
 import request from 'supertest'
 
@@ -103,5 +103,79 @@ describe('WebSocket realtime broadcast', () => {
     const data = await updatedPromise
     expect(data.public_id).toBe(public_id)
     expect(data.status).toBe('TRIAGE_PENDING')
+  })
+
+  it('publishes resource.updated when a coordinator creates a resource', async () => {
+    const coord = await createAuthedUser('DISASTER_COORDINATOR')
+    const ws = await connectWs(coord.token)
+    const updatedPromise = waitForEvent(ws, 'resource.updated')
+
+    const res = await request(testApp)
+      .post('/api/v1/resources')
+      .set('Authorization', `Bearer ${coord.token}`)
+      .send({ resource_type: 'AMBULANCE', name: 'Ambulance One', quantity: 1, status: 'AVAILABLE' })
+    expect(res.status).toBe(201)
+
+    const data = await updatedPromise
+    expect(data.public_id).toBe(res.body.data.resource_id)
+    expect(data.status).toBe('AVAILABLE')
+  })
+
+  it('publishes resource.updated when a coordinator updates a resource', async () => {
+    const coord = await createAuthedUser('DISASTER_COORDINATOR')
+    const created = await request(testApp)
+      .post('/api/v1/resources')
+      .set('Authorization', `Bearer ${coord.token}`)
+      .send({ resource_type: 'FOOD', name: 'Food Supply', quantity: 10, status: 'AVAILABLE' })
+    const ws = await connectWs(coord.token)
+
+    const updatedPromise = waitForEvent(ws, 'resource.updated')
+    const res = await request(testApp)
+      .patch(`/api/v1/resources/${created.body.data.resource_id}`)
+      .set('Authorization', `Bearer ${coord.token}`)
+      .send({ status: 'DEPLOYED' })
+    expect(res.status).toBe(200)
+
+    const data = await updatedPromise
+    expect(data.public_id).toBe(created.body.data.resource_id)
+    expect(data.status).toBe('DEPLOYED')
+  })
+
+  it('publishes team.updated when a coordinator creates a team', async () => {
+    const coord = await createAuthedUser('DISASTER_COORDINATOR')
+    const officer = await createFieldOfficer()
+    const ws = await connectWs(coord.token)
+    const updatedPromise = waitForEvent(ws, 'team.updated')
+
+    const res = await request(testApp)
+      .post('/api/v1/teams')
+      .set('Authorization', `Bearer ${coord.token}`)
+      .send({ name: 'Realtime Team', leader_user_id: officer.publicId })
+    expect(res.status).toBe(201)
+
+    const data = await updatedPromise
+    expect(data.public_id).toBe(res.body.data.id)
+    expect(data.status).toBe('ACTIVE')
+  })
+
+  it('publishes team.updated when a team status changes', async () => {
+    const coord = await createAuthedUser('DISASTER_COORDINATOR')
+    const officer = await createFieldOfficer()
+    const created = await request(testApp)
+      .post('/api/v1/teams')
+      .set('Authorization', `Bearer ${coord.token}`)
+      .send({ name: 'Realtime Team', leader_user_id: officer.publicId })
+    const ws = await connectWs(coord.token)
+
+    const updatedPromise = waitForEvent(ws, 'team.updated')
+    const res = await request(testApp)
+      .patch(`/api/v1/teams/${created.body.data.id}/status`)
+      .set('Authorization', `Bearer ${coord.token}`)
+      .send({ status: 'DEPLOYED' })
+    expect(res.status).toBe(200)
+
+    const data = await updatedPromise
+    expect(data.public_id).toBe(created.body.data.id)
+    expect(data.status).toBe('DEPLOYED')
   })
 })

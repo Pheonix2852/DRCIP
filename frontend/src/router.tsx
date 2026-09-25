@@ -50,12 +50,15 @@ export const router = createHashRouter(
 
         <Route element={<RoleRoute allowedRoles={["DISASTER_COORDINATOR", "ADMINISTRATOR"]} />}>
           <Route path="dashboard" element={<CoordinatorDashboard />} />
-          <Route path="resources" element={<ResourcesPage />} />
           <Route path="teams" element={<TeamsPage />} />
           <Route path="shelters" element={<SheltersPage />} />
           <Route path="reports" element={<ReportsPage />} />
-          <Route path="health" element={<SystemHealthPage />} />
           <Route path="admin" element={<AdminDashboard />} />
+          <Route path="health" element={<SystemHealthPage />} />
+        </Route>
+
+        <Route element={<RoleRoute allowedRoles={["FIELD_OFFICER", "DISASTER_COORDINATOR", "ADMINISTRATOR"]} />}>
+          <Route path="resources" element={<ResourcesPage />} />
         </Route>
 
         <Route element={<RoleRoute allowedRoles={["FIELD_OFFICER", "DISASTER_COORDINATOR", "ADMINISTRATOR"]} />}>

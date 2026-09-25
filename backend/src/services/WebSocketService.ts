@@ -110,6 +110,15 @@ export class WebSocketService {
     });
   }
 
+  publishResourceUpdated(resourceId: string, publicId: string, status: string) {
+    this.broadcast({
+      event: 'resource.updated',
+      version: 1,
+      timestamp: new Date().toISOString(),
+      data: { resource_id: resourceId, public_id: publicId, status },
+    });
+  }
+
   publishAssignmentCreated(assignmentId: string, incidentId: string) {
     this.broadcast({
       event: 'assignment.created',
@@ -125,6 +134,15 @@ export class WebSocketService {
       version: 1,
       timestamp: new Date().toISOString(),
       data: { incident_id: incidentId, recommendation_id: recommendationId },
+    });
+  }
+
+  publishTeamUpdated(teamId: string, publicId: string, status: string) {
+    this.broadcast({
+      event: 'team.updated',
+      version: 1,
+      timestamp: new Date().toISOString(),
+      data: { team_id: teamId, public_id: publicId, status },
     });
   }
 

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Button } from './ui/button'
@@ -6,6 +6,7 @@ import { Card, CardHeader, CardTitle, CardContent } from './ui/card'
 import { Input } from './ui/input'
 import { Select } from './ui/select'
 import { incidents, type IncidentSummary } from '../lib/incidents'
+import { capacity } from '../lib/capacity'
 import { MapPanel } from '../components/MapPanel'
 import { useRealtime } from '../hooks/useRealtime'
 import { useAuth } from '../contexts/AuthContext'
@@ -45,22 +46,33 @@ export function CoordinatorDashboard() {
     sort,
   }), [page, status, disasterType, severity, search, sort])
 
+  const { data: capacityData, refetch: refetchCapacity } = useQuery({
+    queryKey: ['capacity'],
+    queryFn: () => capacity.get(),
+    refetchInterval: 60000,
+  })
+
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['incidents', params],
     queryFn: () => incidents.list(params),
     placeholderData: (prev) => prev,
   })
 
+  const refreshAll = useCallback(() => {
+    refetchCapacity()
+    refetch()
+  }, [refetchCapacity, refetch])
+
   useEffect(() => {
-    const onReconnected = () => { refetch() }
+    const onReconnected = () => { refreshAll() }
     window.addEventListener('drcip:ws-reconnected', onReconnected)
-    const onFocus = () => { refetch() }
+    const onFocus = () => { refreshAll() }
     window.addEventListener('focus', onFocus)
     return () => {
       window.removeEventListener('drcip:ws-reconnected', onReconnected)
       window.removeEventListener('focus', onFocus)
     }
-  }, [refetch])
+  }, [refreshAll])
 
   const items: IncidentSummary[] = data?.items ?? []
 
@@ -89,10 +101,21 @@ export function CoordinatorDashboard() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-xl font-semibold">Coordinator Command Center</h1>
+        <div className="flex gap-2">
+          <Card className="px-3 py-1">
+            <span className="text-xs text-muted-foreground">Resources:</span> {capacityData?.available_resources ?? '-'}
+          </Card>
+          <Card className="px-3 py-1">
+            <span className="text-xs text-muted-foreground">Teams:</span> {capacityData?.active_teams ?? '-'}
+          </Card>
+          <Card className="px-3 py-1">
+            <span className="text-xs text-muted-foreground">Shelter:</span> {capacityData?.available_shelter_capacity ?? '-'}
+          </Card>
+        </div>
         {wsStatus !== 'open' && (
           <span className="text-xs px-3 py-1 rounded-full bg-amber-100 text-amber-800" role="status">
             {wsStatus === 'reconnecting' ? 'Realtime reconnecting...' : 'Realtime unavailable — updates will be fetched'}{' '}
-            <button className="underline ml-1" onClick={() => refetch()}>Refresh now</button>
+            <button className="underline ml-1" onClick={() => refreshAll()}>Refresh now</button>
           </span>
         )}
       </div>

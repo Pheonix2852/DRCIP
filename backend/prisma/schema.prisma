@@ -45,14 +45,14 @@ enum UserRole {
 }
 
 model FieldTeam {
-  id                String   @id @default(uuid())
-  publicId          String   @unique
+  id                String     @id @default(uuid())
+  publicId          String     @unique
   name              String
-  leaderUserId      String   @unique // FK to users, one-to-one
-  status            String
-  capabilityProfile Json     @default("{}")
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  leaderUserId      String     @unique // FK to users, one-to-one
+  status            TeamStatus @default(ACTIVE)
+  capabilityProfile Json       @default("{}")
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
 
   // Relations
   leader      User              @relation(fields: [leaderUserId], references: [id])
@@ -107,7 +107,6 @@ model Incident {
   recommendations     AllocationRecommendation[]
   assignments         Assignment[]
   notifications       Notification[]
-  auditLogs           AuditLog[]
 
   @@index([publicId])
   @@index([status])
@@ -178,7 +177,7 @@ model Resource {
   unit              String?
   capacity          Decimal?
   capabilityProfile Json           @default("{}")
-  location          Json? // PostGIS Point
+  location          Unsupported("geography(Point,4326)")? // PostGIS Point; written via raw SQL
   contactReference  String?
   createdAt         DateTime       @default(now())
   updatedAt         DateTime       @updatedAt
@@ -214,6 +213,13 @@ enum ResourceStatus {
   MAINTENANCE
 }
 
+enum TeamStatus {
+  ACTIVE
+  DEPLOYED
+  UNAVAILABLE
+  MAINTENANCE
+}
+
 model ResponseZone {
   id        String   @id @default(uuid())
   publicId  String   @unique
@@ -234,10 +240,10 @@ model Shelter {
   id               String   @id @default(uuid())
   publicId         String   @unique
   name             String
-  location         Json // PostGIS Point
+  location         Unsupported("geography(Point,4326)") // PostGIS Point; written via raw SQL
   totalCapacity    Int
   currentOccupancy Int      @default(0)
-  status           String   @default("AVAILABLE")
+  status           ShelterStatus @default(AVAILABLE)
   capabilities     Json     @default("{}")
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
@@ -246,6 +252,12 @@ model Shelter {
   assignments AssignmentItem[]
 
   @@index([publicId])
+}
+
+enum ShelterStatus {
+  AVAILABLE
+  FULL
+  UNAVAILABLE
 }
 
 model SeverityPrediction {
@@ -560,7 +572,6 @@ model AuditLog {
 
   // Relations
   actor    User?     @relation(fields: [actorUserId], references: [id])
-  incident Incident? @relation(fields: [entityId], references: [id])
 
   @@index([action])
   @@index([entityType, entityId])

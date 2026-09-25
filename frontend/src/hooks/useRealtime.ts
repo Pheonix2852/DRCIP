@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../contexts/AuthContext'
 
-export type WsEventType = 'incident.created' | 'incident.updated' | 'unknown'
+export type WsEventType = 'incident.created' | 'incident.updated' | 'resource.updated' | 'team.updated' | 'unknown'
 
 export interface WsEvent {
   event: WsEventType
@@ -29,6 +29,10 @@ export function useRealtime() {
             if (parsed.data?.public_id) {
               queryClient.invalidateQueries({ queryKey: ['incident', parsed.data.public_id] })
             }
+            break
+          case 'resource.updated':
+          case 'team.updated':
+            queryClient.invalidateQueries({ queryKey: ['capacity'] })
             break
           default:
             break

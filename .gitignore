@@ -59,4 +59,3 @@ Test Image.jpg
 backend/prisma/migrations/runtime-*.json
 backend/prisma/migrations/trace_body.json
 Test Users.txt
-
