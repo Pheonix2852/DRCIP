@@ -11,7 +11,7 @@ export * from './schemas';
 export * from './api';
 
 // Intelligence-specific types (Health, Version)
-export {
+export type {
   HealthResponse,
   VersionResponse,
 } from './intelligence';

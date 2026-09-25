@@ -33,3 +33,7 @@ export { AllocateReviewPage } from './AllocateReviewPage'
 export { TeamStatusPage } from './FieldTeamPage'
 
 export { FieldUpdatePage } from './FieldUpdatePage'
+
+export { UsersPage } from './UsersPage'
+
+export { AuditLogPage } from './AuditLogPage'

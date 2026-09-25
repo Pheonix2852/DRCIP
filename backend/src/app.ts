@@ -17,6 +17,7 @@ import meRouter from './routes/me';
 import { verifyAuth } from './middleware/auth';
 import mediaRouter from './routes/media';
 import capacityRouter from './routes/capacity';
+import auditRouter from './routes/audit';
 
 import { initializeInternalRoutes } from './routes/internal';
 
@@ -54,6 +55,7 @@ export function createApp() {
   app.use('/api/v1/assignments', verifyAuth, assignmentsRouter);
   app.use('/api/v1/notifications', verifyAuth, notificationsRouter);
   app.use('/api/v1/me', verifyAuth, meRouter);
+  app.use('/api/v1/audit-logs', verifyAuth, auditRouter);
 
   // Internal intelligence routes (Node -> FastAPI)
   app.use('/internal/v1', initializeInternalRoutes());

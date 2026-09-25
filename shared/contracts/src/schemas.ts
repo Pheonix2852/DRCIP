@@ -13,6 +13,7 @@ import {
   SHELTER_STATUSES,
   ASSIGNMENT_STATUSES,
   ASSIGNMENT_EVENT_TYPES,
+  ROLES,
 } from './domain';
 
 // Keep tuple types literal so z.enum infers the exact union, not `string`.
@@ -402,3 +403,60 @@ export const assignmentEventSchema = z.object({
 });
 
 export type AssignmentEventInput = z.infer<typeof assignmentEventSchema>;
+
+// ---------------------------------------------------------------------------
+// Phase 6 — User / Account Administration & Audit Viewer
+// See docs/05_API_Contract.md §3 and §21
+// ---------------------------------------------------------------------------
+
+const ROLE_VALUES = Object.keys(ROLES) as [
+  (typeof ROLES)[keyof typeof ROLES],
+  ...(typeof ROLES)[keyof typeof ROLES][],
+];
+
+export const roleSchema = z.enum(ROLE_VALUES);
+
+export const userQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  search: z.string().trim().max(200).optional(),
+  role: roleSchema.optional(),
+  active: z.enum(['true', 'false']).optional(),
+});
+
+export type UserQueryInput = z.infer<typeof userQuerySchema>;
+
+export const createUserSchema = z.object({
+  name: z.string().trim().min(1, 'Name must not be empty').max(200),
+  email: z.string().trim().email('Invalid email address'),
+  role: roleSchema,
+});
+
+export type CreateUserInput = z.infer<typeof createUserSchema>;
+
+export const updateUserSchema = z
+  .object({
+    name: z.string().trim().min(1).max(200).optional(),
+    role: roleSchema.optional(),
+  })
+  .strict()
+  .refine((d) => d.name !== undefined || d.role !== undefined, {
+    message: 'At least one field (name or role) must be provided',
+  });
+
+export type UpdateUserInput = z.infer<typeof updateUserSchema>;
+
+export const auditLogQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  sort: z.enum(['newest', 'oldest']).default('newest'),
+  search: z.string().trim().max(200).optional(),
+  action: z.string().trim().max(100).optional(),
+  entity_type: z.string().trim().max(100).optional(),
+  entity_id: z.string().trim().max(100).optional(),
+  actor_user_id: z.string().trim().max(100).optional(),
+  from: z.string().trim().max(50).optional(),
+  to: z.string().trim().max(50).optional(),
+});
+
+export type AuditLogQueryInput = z.infer<typeof auditLogQuerySchema>;

@@ -23,6 +23,8 @@ import {
   AllocateReviewPage,
   TeamStatusPage,
   FieldUpdatePage,
+  UsersPage,
+  AuditLogPage,
 } from "./pages/admin.pages";
 import { PrivateRoute, RoleRoute } from "./components";
 import { AuthProvider } from "./contexts/AuthContext";
@@ -55,7 +57,12 @@ export const router = createHashRouter(
           <Route path="shelters" element={<SheltersPage />} />
           <Route path="reports" element={<ReportsPage />} />
           <Route path="admin" element={<AdminDashboard />} />
+          <Route path="admin/audit" element={<AuditLogPage />} />
           <Route path="health" element={<SystemHealthPage />} />
+        </Route>
+
+        <Route element={<RoleRoute allowedRoles={["ADMINISTRATOR"]} />}>
+          <Route path="admin/users" element={<UsersPage />} />
         </Route>
 
         <Route element={<RoleRoute allowedRoles={["FIELD_OFFICER", "DISASTER_COORDINATOR", "ADMINISTRATOR"]} />}>

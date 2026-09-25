@@ -26,6 +26,8 @@ export function Layout() {
     { label: 'Reports', href: '/reports', roles: ['DISASTER_COORDINATOR', 'ADMINISTRATOR'] },
     { label: 'RAG', href: '/rag', roles: ['FIELD_OFFICER', 'DISASTER_COORDINATOR', 'ADMINISTRATOR'] },
     { label: 'Admin', href: '/admin', roles: ['ADMINISTRATOR'] },
+    { label: 'Users', href: '/admin/users', roles: ['ADMINISTRATOR'] },
+    { label: 'Audit', href: '/admin/audit', roles: ['DISASTER_COORDINATOR', 'ADMINISTRATOR'] },
     { label: 'Health', href: '/health', roles: ['DISASTER_COORDINATOR', 'ADMINISTRATOR'] },
   ]
 

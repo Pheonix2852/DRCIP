@@ -52,6 +52,54 @@ export interface CreateUserRequest {
   role: Role;
 }
 
+export interface UserDetail {
+  id: string;
+  name: string;
+  email: string;
+  role: Role;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  last_login_at: string | null;
+  created_by: string | null;
+}
+
+export interface UserListResponse {
+  items: User[];
+  pagination: Pagination;
+}
+
+// Audit
+export interface AuditLogSummary {
+  id: string;
+  actor_user_id: string | null;
+  actor_name: string | null;
+  action: string;
+  entity_type: string;
+  entity_id: string | null;
+  metadata: Record<string, unknown> | null;
+  occurred_at: string;
+}
+
+export interface AuditLogDetail {
+  id: string;
+  actor_user_id: string | null;
+  actor_name: string | null;
+  actor_email: string | null;
+  action: string;
+  entity_type: string;
+  entity_id: string | null;
+  before_state: Record<string, unknown> | null;
+  after_state: Record<string, unknown> | null;
+  metadata: Record<string, unknown> | null;
+  occurred_at: string;
+}
+
+export interface AuditLogListResponse {
+  items: AuditLogSummary[];
+  pagination: Pagination;
+}
+
 // Incidents
 export interface CreateIncidentRequest {
   disaster_type: DisasterType;
@@ -315,11 +363,4 @@ export interface OptimizationResponse {
   message?: string;
 }
 
-// Re-export common types
-export {
-  ApiErrorEnvelope,
-  ApiSuccessEnvelope,
-  ApiResponse,
-  Pagination,
-  PredictionStatus,
-};
+// Re-export common types via index.ts re-exports from domain.ts
