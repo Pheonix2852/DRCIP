@@ -3,6 +3,8 @@ import { AppRequest } from '../middleware/index';
 import { requireRole } from '../middleware/auth';
 import prisma from '../lib/prisma';
 import { teamInclude, serializeTeam } from '../lib/teamSerializer';
+import { queryAssignments } from '../lib/assignmentSerializer';
+import { assignmentQuerySchema } from '@drcip/contracts';
 
 const router = Router();
 
@@ -23,6 +25,17 @@ router.get('/team', requireRole('FIELD_OFFICER'), async (req: AppRequest, res, n
     }
 
     res.json({ success: true, data: serializeTeam(team) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/v1/me/assignments — assignments visible to the Field Officer's team.
+router.get('/assignments', requireRole('FIELD_OFFICER'), async (req: AppRequest, res, next) => {
+  try {
+    const query = assignmentQuerySchema.parse(req.query);
+    const data = await queryAssignments({ userId: req.userId!, role: req.userRole!, query });
+    res.json({ success: true, data });
   } catch (err) {
     next(err);
   }

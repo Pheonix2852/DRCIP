@@ -44,12 +44,13 @@ export const router = createHashRouter(
         <Route path="report" element={<ReportIncidentPage />} />
         <Route path="incidents" element={<MyIncidentsPage />} />
         <Route path="incidents/:id" element={<IncidentDetailsPage />} />
-        <Route path="incidents/:id/review" element={<AllocateReviewPage />} />
         <Route path="notifications" element={<NotificationsPage />} />
         <Route path="profile" element={<ProfilePage />} />
 
         <Route element={<RoleRoute allowedRoles={["DISASTER_COORDINATOR", "ADMINISTRATOR"]} />}>
           <Route path="dashboard" element={<CoordinatorDashboard />} />
+          <Route path="incidents/:id/review" element={<AllocateReviewPage />} />
+          <Route path="assignments" element={<AssignmentsPage />} />
           <Route path="teams" element={<TeamsPage />} />
           <Route path="shelters" element={<SheltersPage />} />
           <Route path="reports" element={<ReportsPage />} />

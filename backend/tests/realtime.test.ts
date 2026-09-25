@@ -2,7 +2,7 @@ import { beforeAll, afterAll, describe, it, expect } from 'vitest'
 import http from 'node:http'
 import WebSocket from 'ws'
 import prisma from '../src/lib/prisma'
-import { testApp, createAuthedUser, authHeader, truncateTables, createFieldOfficer } from './helpers'
+import { testApp, createAuthedUser, authHeader, truncateTables, createFieldOfficer, createResource, createIncident } from './helpers'
 import { WebSocketService } from '../src/services/WebSocketService'
 import request from 'supertest'
 
@@ -177,5 +177,48 @@ describe('WebSocket realtime broadcast', () => {
     const data = await updatedPromise
     expect(data.public_id).toBe(created.body.data.id)
     expect(data.status).toBe('DEPLOYED')
+  })
+
+  it('publishes assignment.created when a coordinator creates an assignment', async () => {
+    const coord = await createAuthedUser('DISASTER_COORDINATOR')
+    const citizen = await createAuthedUser('CITIZEN')
+    const ws = await connectWs(coord.token)
+    const incident = await createIncident(citizen.token)
+    const resource = await createResource()
+
+    const createdPromise = waitForEvent(ws, 'assignment.created')
+    const res = await request(testApp)
+      .post(`/api/v1/incidents/${incident.body.data.incident_id}/assignments`)
+      .set('Authorization', `Bearer ${coord.token}`)
+      .send({ items: [{ resource_type: 'AMBULANCE', resource_id: resource.publicId, quantity: 1 }] })
+    expect(res.status).toBe(201)
+
+    const data = await createdPromise
+    expect(data.assignment_id).toBe(res.body.data.id)
+    expect(data.incident_id).toBe(incident.body.data.incident_id)
+  })
+
+  it('publishes assignment.updated when a coordinator changes assignment status', async () => {
+    const coord = await createAuthedUser('DISASTER_COORDINATOR')
+    const citizen = await createAuthedUser('CITIZEN')
+    const incident = await createIncident(citizen.token)
+    const resource = await createResource()
+    const created = await request(testApp)
+      .post(`/api/v1/incidents/${incident.body.data.incident_id}/assignments`)
+      .set('Authorization', `Bearer ${coord.token}`)
+      .send({ items: [{ resource_type: 'AMBULANCE', resource_id: resource.publicId, quantity: 1 }] })
+    expect(created.status).toBe(201)
+
+    const ws = await connectWs(coord.token)
+    const updatedPromise = waitForEvent(ws, 'assignment.updated')
+    const res = await request(testApp)
+      .patch(`/api/v1/assignments/${created.body.data.id}/status`)
+      .set('Authorization', `Bearer ${coord.token}`)
+      .send({ status: 'IN_PROGRESS' })
+    expect(res.status).toBe(200)
+
+    const data = await updatedPromise
+    expect(data.assignment_id).toBe(created.body.data.id)
+    expect(data.status).toBe('IN_PROGRESS')
   })
 })

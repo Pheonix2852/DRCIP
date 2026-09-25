@@ -2,7 +2,15 @@ import { useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../contexts/AuthContext'
 
-export type WsEventType = 'incident.created' | 'incident.updated' | 'resource.updated' | 'team.updated' | 'unknown'
+export type WsEventType =
+  | 'incident.created'
+  | 'incident.updated'
+  | 'incident.resolved'
+  | 'resource.updated'
+  | 'team.updated'
+  | 'assignment.created'
+  | 'assignment.updated'
+  | 'unknown'
 
 export interface WsEvent {
   event: WsEventType
@@ -31,8 +39,19 @@ export function useRealtime() {
             }
             break
           case 'resource.updated':
+            queryClient.invalidateQueries({ queryKey: ['capacity'] })
+            queryClient.invalidateQueries({ queryKey: ['resources'] })
+            break
           case 'team.updated':
             queryClient.invalidateQueries({ queryKey: ['capacity'] })
+            queryClient.invalidateQueries({ queryKey: ['teams'] })
+            break
+          case 'assignment.created':
+          case 'assignment.updated':
+            queryClient.invalidateQueries({ queryKey: ['assignments'] })
+            if (parsed.data?.incident_id) {
+              queryClient.invalidateQueries({ queryKey: ['incident', parsed.data.incident_id] })
+            }
             break
           default:
             break

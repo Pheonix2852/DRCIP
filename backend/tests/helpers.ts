@@ -64,7 +64,7 @@ export async function createIncident(token: string, overrides: Record<string, un
 
 export async function truncateTables() {
   await prisma.$executeRawUnsafe(
-    'TRUNCATE TABLE "IncidentMedia", "SeverityPrediction", "AuditLog", "Incident", "Resource", "FieldTeamMember", "FieldTeam", "Shelter", "User" RESTART IDENTITY CASCADE',
+    'TRUNCATE TABLE "AssignmentEvent", "AssignmentItem", "Assignment", "AllocationRecommendationItem", "AllocationRecommendation", "IncidentMedia", "SeverityPrediction", "AuditLog", "Incident", "Resource", "FieldTeamMember", "FieldTeam", "Shelter", "User" RESTART IDENTITY CASCADE',
   )
 }
 

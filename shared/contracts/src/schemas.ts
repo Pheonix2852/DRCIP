@@ -11,6 +11,8 @@ import {
   RESOURCE_STATUSES,
   TEAM_STATUSES,
   SHELTER_STATUSES,
+  ASSIGNMENT_STATUSES,
+  ASSIGNMENT_EVENT_TYPES,
 } from './domain';
 
 // Keep tuple types literal so z.enum infers the exact union, not `string`.
@@ -281,3 +283,122 @@ export const shelterQuerySchema = z
   .refine(hasNearby, { message: 'nearby_lat, nearby_lng and nearby_radius_km must be provided together' });
 
 export type ShelterQueryInput = z.infer<typeof shelterQuerySchema>;
+
+// ---------------------------------------------------------------------------
+// Phase 4 — Assignment contracts
+// See docs/02_Functional_Specification.md §10 and docs/05_API_Contract.md §10
+// ---------------------------------------------------------------------------
+
+const ASSIGNMENT_STATUS_VALUES = Object.keys(ASSIGNMENT_STATUSES) as [
+  (typeof ASSIGNMENT_STATUSES)[keyof typeof ASSIGNMENT_STATUSES],
+  ...(typeof ASSIGNMENT_STATUSES)[keyof typeof ASSIGNMENT_STATUSES][],
+];
+
+const ASSIGNMENT_EVENT_TYPE_VALUES = Object.keys(ASSIGNMENT_EVENT_TYPES) as [
+  (typeof ASSIGNMENT_EVENT_TYPES)[keyof typeof ASSIGNMENT_EVENT_TYPES],
+  ...(typeof ASSIGNMENT_EVENT_TYPES)[keyof typeof ASSIGNMENT_EVENT_TYPES][],
+];
+
+export const assignmentStatusSchema = z.enum(ASSIGNMENT_STATUS_VALUES);
+
+// Each item is one of three discriminated variants. The Field Team and Shelter
+// variants carry no resource_type — that field exists only on resource items.
+export const resourceAssignmentItemSchema = z
+  .object({
+    resource_type: resourceTypeSchema,
+    resource_id: z.string().trim().min(1, 'Resource id is required'),
+    quantity: z.number().positive('Quantity must be greater than zero'),
+  })
+  .strict();
+
+export type ResourceAssignmentItemInput = z.infer<typeof resourceAssignmentItemSchema>;
+
+export const teamAssignmentItemSchema = z
+  .object({
+    team_id: z.string().trim().min(1, 'Team id is required'),
+    quantity: z.literal(1, { errorMap: () => ({ message: 'A Field Team item must have quantity 1' }) }),
+  })
+  .strict();
+
+export type TeamAssignmentItemInput = z.infer<typeof teamAssignmentItemSchema>;
+
+export const shelterAssignmentItemSchema = z
+  .object({
+    shelter_id: z.string().trim().min(1, 'Shelter id is required'),
+    quantity: z
+      .number()
+      .int('A Shelter item quantity must be a whole number of slots')
+      .positive('Quantity must be greater than zero'),
+  })
+  .strict();
+
+export type ShelterAssignmentItemInput = z.infer<typeof shelterAssignmentItemSchema>;
+
+export const assignmentItemSchema = z.union([
+  resourceAssignmentItemSchema,
+  teamAssignmentItemSchema,
+  shelterAssignmentItemSchema,
+]);
+
+export type AssignmentItemInput = z.infer<typeof assignmentItemSchema>;
+
+export const createAssignmentSchema = z
+  .object({
+    recommendation_id: z.string().trim().min(1).optional(),
+    items: z.array(assignmentItemSchema).min(1, 'At least one assignment item is required'),
+    notes: z.string().trim().max(2000).optional(),
+  })
+  .strict();
+
+export type CreateAssignmentInput = z.infer<typeof createAssignmentSchema>;
+
+// CREATED is emitted automatically on assignment creation and is not a
+// caller-supplied operational event.
+const MANUAL_EVENT_TYPES = ASSIGNMENT_EVENT_TYPE_VALUES.filter((t) => t !== 'CREATED') as [
+  Exclude<(typeof ASSIGNMENT_EVENT_TYPES)[keyof typeof ASSIGNMENT_EVENT_TYPES], 'CREATED'>,
+  ...Exclude<(typeof ASSIGNMENT_EVENT_TYPES)[keyof typeof ASSIGNMENT_EVENT_TYPES], 'CREATED'>[],
+];
+
+export const assignmentQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  status: assignmentStatusSchema.optional(),
+  incident_id: z.string().trim().min(1).optional(),
+  sort: z.enum(['newest', 'oldest']).default('newest'),
+});
+
+export type AssignmentQueryInput = z.infer<typeof assignmentQuerySchema>;
+
+// Phase 4/5 lifecycle
+export const assignmentStatusUpdateSchema = z.object({
+  status: z.enum(['IN_PROGRESS', 'CANCELLED', 'COMPLETED']),
+  notes: z.string().trim().max(2000).optional(),
+});
+
+export type AssignmentStatusUpdateInput = z.infer<typeof assignmentStatusUpdateSchema>;
+
+export const fieldUpdateSchema = z.object({
+  event_type: z.enum([
+    'EN_ROUTE',
+    'ARRIVED',
+    'IN_PROGRESS',
+    'COMPLETED',
+    'BLOCKED',
+  ]),
+  notes: z.string().trim().max(2000).optional(),
+});
+
+export type FieldUpdateInput = z.infer<typeof fieldUpdateSchema>;
+
+export const resolveIncidentSchema = z.object({
+  notes: z.string().trim().min(1, 'Resolution notes are required').max(2000),
+});
+
+export type ResolveIncidentInput = z.infer<typeof resolveIncidentSchema>;
+
+export const assignmentEventSchema = z.object({
+  event_type: z.enum(MANUAL_EVENT_TYPES),
+  notes: z.string().trim().max(2000).optional(),
+});
+
+export type AssignmentEventInput = z.infer<typeof assignmentEventSchema>;

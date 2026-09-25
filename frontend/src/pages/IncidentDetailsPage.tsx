@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { Button } from './ui/button'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from './ui/card'
@@ -166,6 +166,11 @@ export function IncidentDetailsPage() {
 
           {isCoordinator && (
             <div className="pt-2 border-t">
+              <div className="flex flex-wrap gap-2 mb-2">
+                <Link to={`/incidents/${incident.id}/review`}>
+                  <Button>Manual Assignment</Button>
+                </Link>
+              </div>
               {!showTriage ? (
                 <Button onClick={() => setShowTriage(true)}>Triage Incident</Button>
               ) : (

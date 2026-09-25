@@ -401,7 +401,7 @@ enum AssignmentStatus {
 model AssignmentItem {
   id           String       @id @default(uuid())
   assignmentId String
-  resourceType ResourceType
+  resourceType ResourceType?
   resourceId   String?
   teamId       String?
   shelterId    String?

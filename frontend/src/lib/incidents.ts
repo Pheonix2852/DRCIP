@@ -96,6 +96,8 @@ export const incidents = {
   detail: (id: string) => api.get(`/api/v1/incidents/${id}`).then((res) => unwrap<IncidentDetails>(res)),
   triage: (id: string, data: TriageRequest) =>
     api.patch(`/api/v1/incidents/${id}/triage`, data).then((res) => unwrap(res)),
+  resolve: (id: string, data: { notes: string }) =>
+    api.patch(`/api/v1/incidents/${id}/resolve`, data).then((res) => unwrap<{ incident_id: string; status: string; resolved_at: string }>(res)),
   uploadMedia: (id: string, formData: FormData) =>
     // Do NOT set Content-Type manually — the browser must add the multipart
     // boundary itself when passing a FormData body.

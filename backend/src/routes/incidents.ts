@@ -1,10 +1,11 @@
 import { Router } from 'express';
 import { AppRequest } from '../middleware/index';
+import { AppError } from '../middleware/errorHandler';
 import { requireRole } from '../middleware/auth';
 import prisma from '../lib/prisma';
 import { Prisma } from '@prisma/client';
 import { v4 as uuidv4 } from 'uuid';
-import { createIncidentSchema, incidentQuerySchema, triageSchema } from '@drcip/contracts';
+import { createIncidentSchema, incidentQuerySchema, triageSchema, resolveIncidentSchema } from '@drcip/contracts';
 import { WebSocketService } from '../services/WebSocketService';
 
 const router = Router();
@@ -373,6 +374,70 @@ router.patch('/:incidentId/triage', requireRole('DISASTER_COORDINATOR', 'ADMINIS
         confirmed_severity: updated.confirmedSeverity,
         status: updated.status,
         updated_at: updated.updatedAt,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PATCH /api/v1/incidents/:incidentId/resolve — Coordinator/Admin only.
+// Preconditions: incident is IN_RESPONSE, at least one assignment exists, and
+// every assignment is COMPLETED or CANCELLED.
+router.patch('/:incidentId/resolve', requireRole('DISASTER_COORDINATOR', 'ADMINISTRATOR'), async (req: AppRequest, res, next) => {
+  try {
+    const body = resolveIncidentSchema.parse(req.body);
+
+    const incident = await prisma.incident.findFirst({ where: { publicId: req.params.incidentId } });
+    if (!incident) {
+      return res.status(404).json({
+        success: false,
+        error: { code: 'NOT_FOUND', message: 'Incident not found' },
+        request_id: req.requestId,
+      });
+    }
+    if (incident.status !== 'IN_RESPONSE') {
+      throw new AppError(400, 'INCIDENT_STATUS', `Only an IN_RESPONSE incident can be resolved (current: ${incident.status})`);
+    }
+
+    const assignments = await prisma.assignment.findMany({
+      where: { incidentId: incident.id },
+      select: { id: true, status: true },
+    });
+    if (assignments.length === 0) {
+      throw new AppError(422, 'NO_ASSIGNMENTS', 'Cannot resolve an incident with no assignments');
+    }
+    const active = assignments.filter((a) => a.status !== 'COMPLETED' && a.status !== 'CANCELLED');
+    if (active.length > 0) {
+      throw new AppError(422, 'ASSIGNMENTS_ACTIVE', `${active.length} assignment(s) are still active`);
+    }
+
+    const [updated] = await prisma.$transaction([
+      prisma.incident.update({
+        where: { id: incident.id },
+        data: { status: 'RESOLVED', resolvedAt: new Date() },
+      }),
+      prisma.auditLog.create({
+        data: {
+          actorUserId: req.userId,
+          action: 'INCIDENT_RESOLVE',
+          entityType: 'INCIDENT',
+          entityId: incident.id,
+          beforeState: { status: incident.status },
+          afterState: { status: 'RESOLVED' },
+          metadata: { notes: body.notes, incident_public_id: incident.publicId },
+        },
+      }),
+    ]);
+
+    getWsService().publishIncidentUpdated(incident.id, incident.publicId, 'RESOLVED');
+
+    res.json({
+      success: true,
+      data: {
+        incident_id: updated.publicId,
+        status: updated.status,
+        resolved_at: updated.resolvedAt,
       },
     });
   } catch (err) {

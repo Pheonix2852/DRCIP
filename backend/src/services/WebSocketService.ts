@@ -119,12 +119,21 @@ export class WebSocketService {
     });
   }
 
-  publishAssignmentCreated(assignmentId: string, incidentId: string) {
+  publishAssignmentCreated(assignmentPublicId: string, incidentPublicId: string) {
     this.broadcast({
       event: 'assignment.created',
       version: 1,
       timestamp: new Date().toISOString(),
-      data: { assignment_id: assignmentId, incident_id: incidentId },
+      data: { assignment_id: assignmentPublicId, incident_id: incidentPublicId },
+    });
+  }
+
+  publishAssignmentUpdated(assignmentPublicId: string, incidentPublicId: string, status: string) {
+    this.broadcast({
+      event: 'assignment.updated',
+      version: 1,
+      timestamp: new Date().toISOString(),
+      data: { assignment_id: assignmentPublicId, incident_id: incidentPublicId, status },
     });
   }
 

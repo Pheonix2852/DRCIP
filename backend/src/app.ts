@@ -11,7 +11,7 @@ import incidentsRouter from './routes/incidents';
 import resourcesRouter from './routes/resources';
 import teamsRouter from './routes/teams';
 import sheltersRouter from './routes/shelters';
-import assignmentsRouter from './routes/assignments';
+import assignmentsRouter, { incidentAssignmentsRouter } from './routes/assignments';
 import notificationsRouter from './routes/notifications';
 import meRouter from './routes/me';
 import { verifyAuth } from './middleware/auth';
@@ -44,6 +44,7 @@ export function createApp() {
   app.use('/api/v1/users', verifyAuth, usersRouter);
   app.use('/api/v1/incidents', verifyAuth, incidentsRouter);
   app.use('/api/v1/incidents', verifyAuth, mediaRouter);
+  app.use('/api/v1/incidents', verifyAuth, incidentAssignmentsRouter);
 // ...
   app.use('/api/v1/resources', verifyAuth, resourcesRouter);
   app.use('/api/v1/teams', verifyAuth, teamsRouter);

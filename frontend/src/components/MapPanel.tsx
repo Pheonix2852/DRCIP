@@ -87,7 +87,7 @@ export function MapPanel({
   }
 
   return (
-    <div className={`${height} rounded-lg overflow-hidden border`}>
+    <div className={`${height} relative z-0 rounded-lg overflow-hidden border`}>
       <MapContainer
         center={center}
         zoom={zoom}
