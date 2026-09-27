@@ -37,6 +37,61 @@ async function main() {
 
   console.log(`✅ Admin user created/updated: ${admin.publicId} (${admin.email})`);
 
+  // Response zones covering a representative area (Kolkata region for demo).
+  // The geometry_geom spatial column is populated by the PostGIS sync trigger.
+  const zones = [
+    {
+      name: 'North Zone',
+      coordinates: [[[88.2, 22.65], [88.4, 22.65], [88.4, 22.8], [88.2, 22.8], [88.2, 22.65]]],
+    },
+    {
+      name: 'South Zone',
+      coordinates: [[[88.2, 22.4], [88.4, 22.4], [88.4, 22.55], [88.2, 22.55], [88.2, 22.4]]],
+    },
+    {
+      name: 'Central Zone',
+      coordinates: [[[88.3, 22.55], [88.38, 22.55], [88.38, 22.65], [88.3, 22.65], [88.3, 22.55]]],
+    },
+    {
+      name: 'East Zone',
+      coordinates: [[[88.4, 22.45], [88.6, 22.45], [88.6, 22.7], [88.4, 22.7], [88.4, 22.45]]],
+    },
+    {
+      name: 'West Zone',
+      coordinates: [[[88.05, 22.45], [88.2, 22.45], [88.2, 22.7], [88.05, 22.7], [88.05, 22.45]]],
+    },
+  ];
+
+  for (const zone of zones) {
+    const publicId = `ZONE-${zone.name.replace(/\s+/g, '-').toUpperCase()}`;
+    await prisma.$executeRaw`
+      INSERT INTO "ResponseZone" ("id", "publicId", "name", "geometry", "isActive", "createdAt", "updatedAt")
+      VALUES (
+        gen_random_uuid(),
+        ${publicId},
+        ${zone.name},
+        ${JSON.stringify({ type: 'Polygon', coordinates: zone.coordinates })}::jsonb,
+        true,
+        NOW(),
+        NOW()
+      )
+      ON CONFLICT ("publicId") DO NOTHING
+    `;
+  }
+  console.log(`✅ Response zones seeded: ${zones.length}`);
+
+  // Backfill response zones for pre-existing incidents via spatial containment.
+  const backfilled = await prisma.$executeRaw`
+    UPDATE "Incident" i
+    SET "responseZoneId" = rz.id
+    FROM "ResponseZone" rz
+    WHERE i."responseZoneId" IS NULL
+      AND rz."isActive" = true
+      AND rz."geometry_geom" IS NOT NULL
+      AND ST_Contains(rz."geometry_geom", i."location"::geometry)
+  `;
+  console.log(`✅ Backfilled response zone for ${backfilled} incident(s)`);
+
   console.log('🎉 Database seed completed successfully!');
 }
 

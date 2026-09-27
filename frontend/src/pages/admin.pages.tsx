@@ -20,9 +20,7 @@ export { SheltersPage } from './SheltersPage'
 
 export { AssignmentsPage } from './AssignmentsPage'
 
-export function ReportsPage() {
-  return <div className="max-w-6xl mx-auto">Reports & Analytics Page - Placeholder</div>
-}
+export { ReportsPage } from './ReportsPage'
 
 export function SystemHealthPage() {
   return <div className="max-w-6xl mx-auto">System Health Page - Placeholder</div>

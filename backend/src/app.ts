@@ -18,6 +18,8 @@ import { verifyAuth } from './middleware/auth';
 import mediaRouter from './routes/media';
 import capacityRouter from './routes/capacity';
 import auditRouter from './routes/audit';
+import responseZonesRouter from './routes/responseZones';
+import reportsRouter from './routes/reports';
 
 import { initializeInternalRoutes } from './routes/internal';
 
@@ -51,6 +53,8 @@ export function createApp() {
   app.use('/api/v1/teams', verifyAuth, teamsRouter);
   app.use('/api/v1/shelters', verifyAuth, sheltersRouter);
   app.use('/api/v1/capacity', verifyAuth, capacityRouter);
+  app.use('/api/v1/response-zones', verifyAuth, responseZonesRouter);
+  app.use('/api/v1/reports', verifyAuth, reportsRouter);
 
   app.use('/api/v1/assignments', verifyAuth, assignmentsRouter);
   app.use('/api/v1/notifications', verifyAuth, notificationsRouter);

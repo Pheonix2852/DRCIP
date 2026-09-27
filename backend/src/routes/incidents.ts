@@ -106,6 +106,9 @@ router.post('/', async (req: AppRequest, res, next) => {
 router.get('/', async (req: AppRequest, res, next) => {
   try {
     const query = incidentQuerySchema.parse(req.query);
+    // Phase 8 — response_zone_id is not yet part of the shared query schema, so
+    // it is read and filtered here. The value is a zone public id.
+    const responseZoneId = typeof req.query.response_zone_id === 'string' ? req.query.response_zone_id.trim() : '';
 
     const offset = (query.page - 1) * query.limit;
 
@@ -154,6 +157,7 @@ router.get('/', async (req: AppRequest, res, next) => {
         ${query.disaster_type ? Prisma.sql`AND i."disasterType" = ${query.disaster_type}::"DisasterType"` : Prisma.empty}
         ${query.severity ? Prisma.sql`AND i."confirmedSeverity" = ${query.severity}::"SeverityLevel"` : Prisma.empty}
         ${query.search ? Prisma.sql`AND (i.description ILIKE ${`%${query.search}%`} OR i."publicId" ILIKE ${`%${query.search}%`})` : Prisma.empty}
+        ${responseZoneId ? Prisma.sql`AND rz."publicId" = ${responseZoneId}` : Prisma.empty}
       ORDER BY i."createdAt" ${query.sort === 'oldest' ? Prisma.sql`ASC` : Prisma.sql`DESC`}
       LIMIT ${query.limit} OFFSET ${offset}
     `;
@@ -166,6 +170,9 @@ router.get('/', async (req: AppRequest, res, next) => {
         ${query.disaster_type ? Prisma.sql`AND i."disasterType" = ${query.disaster_type}::"DisasterType"` : Prisma.empty}
         ${query.severity ? Prisma.sql`AND i."confirmedSeverity" = ${query.severity}::"SeverityLevel"` : Prisma.empty}
         ${query.search ? Prisma.sql`AND (i.description ILIKE ${`%${query.search}%`} OR i."publicId" ILIKE ${`%${query.search}%`})` : Prisma.empty}
+        ${responseZoneId
+          ? Prisma.sql`AND EXISTS (SELECT 1 FROM "ResponseZone" rz WHERE rz.id = i."responseZoneId" AND rz."publicId" = ${responseZoneId})`
+          : Prisma.empty}
     `;
     const total = Number(totalResult[0]?.count ?? 0);
 

@@ -89,6 +89,42 @@ describe('GET /api/v1/incidents — filters, search, sort', () => {
     expect(res.body.data.items[0].confirmed_severity).toBe('HIGH')
   })
 
+  it('filters by response zone public id', async () => {
+    const zonePublicId = 'ZONE-TEST-FILTER'
+    // Tight polygon around only the FIRE incident point (22.6, 88.3).
+    const polygon = 'POLYGON((88.29 22.59, 88.31 22.59, 88.31 22.61, 88.29 22.61, 88.29 22.59))'
+    const zoneRows = await prisma.$queryRaw<{ id: string }[]>`
+      INSERT INTO "ResponseZone" ("id","publicId","name","geometry","isActive","createdAt","updatedAt")
+      VALUES (
+        gen_random_uuid(), ${zonePublicId}, 'Filter Zone',
+        ${JSON.stringify({
+          type: 'Polygon',
+          coordinates: [[[88.29, 22.59], [88.31, 22.59], [88.31, 22.61], [88.29, 22.61], [88.29, 22.59]]],
+        })}::jsonb,
+        true, now(), now()
+      )
+      RETURNING id
+    `
+    await prisma.$executeRaw`
+      UPDATE "Incident"
+      SET "responseZoneId" = ${zoneRows[0].id}::uuid
+      WHERE ST_Contains(ST_GeomFromText(${polygon}, 4326), "location"::geometry)
+    `
+
+    const res = await list(coordToken(), { response_zone_id: zonePublicId })
+    expect(res.status).toBe(200)
+    expect(res.body.data.items.length).toBe(1)
+    expect(res.body.data.items[0].disaster_type).toBe('FIRE')
+    expect(res.body.data.items[0].response_zone).toBe(zonePublicId)
+  })
+
+  it('returns an empty list for an unknown response zone', async () => {
+    const res = await list(coordToken(), { response_zone_id: 'ZONE-DOES-NOT-EXIST' })
+    expect(res.status).toBe(200)
+    expect(res.body.data.items.length).toBe(0)
+    expect(res.body.data.pagination.total).toBe(0)
+  })
+
   it('text search matches description (case-insensitive', async () => {
     const res = await list(coordToken(), { search: 'river' })
     expect(res.status).toBe(200)
