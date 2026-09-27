@@ -12,6 +12,9 @@ import {
   PredictionStatus,
   NotificationChannel,
   NotificationDeliveryStatus,
+  NotificationType,
+  NotificationPriority,
+  NotificationRecipientScope,
   RagResponseStatus,
   Pagination,
   ApiErrorEnvelope,
@@ -221,11 +224,32 @@ export interface RecommendationSummary {
 export interface NotificationSummary {
   id: string;
   public_id: string;
+  // Stable grouping key shared by every channel row of the same logical event for
+  // one recipient (dedupeKey minus its channel segment). Used to render one
+  // inbox item for an IN_APP + EMAIL pair.
+  logical_key: string;
   channel: NotificationChannel;
-  notification_type: string;
+  notification_type: NotificationType;
+  priority: NotificationPriority;
+  message: string;
   payload: Record<string, unknown>;
   delivery_status: NotificationDeliveryStatus;
+  sent_at: string | null;
+  read_at: string | null;
+  incident_public_id: string | null;
+  assignment_public_id: string | null;
   created_at: string;
+}
+
+export interface NotificationListResponse {
+  items: NotificationSummary[];
+  pagination: Pagination;
+}
+
+export interface BroadcastNotificationRequest {
+  message: string;
+  severity: NotificationPriority;
+  recipient_scope: NotificationRecipientScope;
 }
 
 // RAG
@@ -364,3 +388,66 @@ export interface OptimizationResponse {
 }
 
 // Re-export common types via index.ts re-exports from domain.ts
+
+// ---------------------------------------------------------------------------
+// Phase 8 — Reports & Analytics
+// See docs/02_Functional_Specification.md §13 and docs/06_UI_UX_Specification.md §18
+// ---------------------------------------------------------------------------
+
+export interface ReportAnalyticsResponse {
+  filters: {
+    date_from: string | null;
+    date_to: string | null;
+    disaster_type: string | null;
+    response_zone_id: string | null;
+  };
+  incidents: {
+    total: number;
+    by_status: Record<string, number>;
+    by_disaster_type: Record<string, number>;
+    by_response_zone: Record<string, number>;
+    by_severity: Record<string, number>;
+    people_affected_total: number;
+    trend: { date: string; count: number }[];
+  };
+  response_times: {
+    time_to_assign_ms: { avg: number | null; median: number | null; p90: number | null; count: number };
+    time_to_first_response_ms: { avg: number | null; median: number | null; p90: number | null; count: number };
+    time_to_complete_ms: { avg: number | null; median: number | null; p90: number | null; count: number };
+    time_to_resolve_ms: { avg: number | null; median: number | null; p90: number | null; count: number };
+  };
+  resources: {
+    total: number;
+    by_status: Record<string, number>;
+    utilization_rate: number;
+  };
+  teams: {
+    total: number;
+    active: number;
+    by_status: Record<string, number>;
+  };
+  shelters: {
+    total: number;
+    total_capacity: number;
+    total_occupancy: number;
+    utilization_rate: number;
+    by_status: Record<string, number>;
+  };
+  prediction: {
+    triage_count: number;
+    triage_ratio: number;
+    severity_distribution: Record<string, number>;
+    prediction_available: false;
+    degraded_message: string;
+  };
+}
+
+export interface ResponseZoneSummary {
+  public_id: string;
+  name: string;
+  is_active: boolean;
+}
+
+export interface ResponseZoneListResponse {
+  items: ResponseZoneSummary[];
+}

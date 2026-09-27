@@ -13,6 +13,7 @@ import {
   teamStatusUpdateSchema,
 } from '@drcip/contracts';
 import { WebSocketService } from '../services/WebSocketService';
+import { NotificationService, type CreatedNotification } from '../services/NotificationService';
 
 const router = Router();
 
@@ -252,12 +253,27 @@ router.patch('/:teamId/status', requireRole(...READ_ROLES), async (req: AppReque
         },
       });
 
-      return next;
+      // Phase 7 — team status changes reach active coordinators + admins.
+      const notificationRows: CreatedNotification[] = [];
+      if (next.status !== team.status) {
+        notificationRows.push(
+          ...(await NotificationService.notifyTeamStatus(tx, {
+            teamId: team.id,
+            teamPublicId: team.publicId,
+            teamName: next.name,
+            status: next.status,
+          })),
+        );
+      }
+
+      return { team: next, notificationRows };
     });
 
-    getWsService().publishTeamUpdated(updated.id, updated.publicId, updated.status);
+    await NotificationService.afterCommit(updated.notificationRows);
 
-    res.json({ success: true, data: serializeTeam(updated) });
+    getWsService().publishTeamUpdated(updated.team.id, updated.team.publicId, updated.team.status);
+
+    res.json({ success: true, data: serializeTeam(updated.team) });
   } catch (err) {
     next(err);
   }

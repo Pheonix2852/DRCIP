@@ -81,4 +81,13 @@ describe('AuthContext WebSocket registration under StrictMode', () => {
     expect(MockWebSocket.instances).toHaveLength(1)
     expect(MockWebSocket.instances[0].url).toContain('token=test-token')
   })
+
+  it('auto-reconnects when the socket closes (self-recovery)', async () => {
+    renderProvider()
+    await waitFor(() => expect(screen.getByTestId('status').textContent).toBe('open:yes'))
+    const first = MockWebSocket.instances[0]
+    first.close()
+    await waitFor(() => expect(MockWebSocket.instances.length).toBeGreaterThanOrEqual(2), { timeout: 3000 })
+    await waitFor(() => expect(screen.getByTestId('status').textContent).toBe('open:yes'), { timeout: 3000 })
+  })
 })

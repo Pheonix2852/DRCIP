@@ -3,7 +3,7 @@ import prisma from './prisma';
 import type { AssignmentQueryInput } from '@drcip/contracts';
 
 export const assignmentInclude = {
-  incident: { select: { id: true, publicId: true, status: true } },
+  incident: { select: { id: true, publicId: true, status: true, reporterUserId: true } },
   assigner: { select: { publicId: true } },
   recommendation: { select: { publicId: true } },
   // The Prisma relation field is generated as `FieldTeam` (see schema.prisma).

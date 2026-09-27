@@ -163,4 +163,14 @@ export class WebSocketService {
       data: { incident_id: incidentId, public_id: publicId },
     });
   }
+
+  // Recipient-scoped: sent only to the intended notification recipient's socket.
+  publishNotificationCreated(recipientUserId: string, publicId: string, notificationType: string) {
+    this.sendToUser(recipientUserId, {
+      event: 'notification.created',
+      version: 1,
+      timestamp: new Date().toISOString(),
+      data: { notification_id: publicId, notification_type: notificationType },
+    });
+  }
 }

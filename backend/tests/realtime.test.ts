@@ -222,3 +222,47 @@ describe('WebSocket realtime broadcast', () => {
     expect(data.status).toBe('IN_PROGRESS')
   })
 })
+
+describe('WebSocket notification.created recipient scoping', () => {
+  it('delivers notification.created only to recipients of a COORDINATORS broadcast', async () => {
+    const coord = await createAuthedUser('DISASTER_COORDINATOR')
+    const citizen = await createAuthedUser('CITIZEN')
+    const coordWs = await connectWs(coord.token)
+    const citizenWs = await connectWs(citizen.token)
+
+    const coordinatorNotified = waitForEvent(coordWs, 'notification.created')
+    const citizenNotified = waitForEvent(citizenWs, 'notification.created').then(
+      () => true,
+      () => false,
+    )
+
+    const res = await request(testApp)
+      .post('/api/v1/notifications/broadcast')
+      .set('Authorization', `Bearer ${coord.token}`)
+      .send({ message: 'Containment area expanding', severity: 'HIGH', recipient_scope: 'COORDINATORS' })
+    expect(res.status).toBe(201)
+
+    const data = await coordinatorNotified
+    expect(data.notification_id).toMatch(/^NTF-/)
+    expect(data.notification_type).toBe('EMERGENCY_BROADCAST')
+    // The citizen is not a COORDINATORS-scope recipient and must receive nothing.
+    expect(await citizenNotified).toBe(false)
+  })
+
+  it('delivers notification.created to the reporter on triage but type-agnostic of escalation', async () => {
+    const coord = await createAuthedUser('DISASTER_COORDINATOR')
+    const citizen = await createAuthedUser('CITIZEN')
+    const citizenWs = await connectWs(citizen.token)
+
+    const reporterNotified = waitForEvent(citizenWs, 'notification.created')
+    const incident = await createIncident(citizen.token)
+    await request(testApp)
+      .patch(`/api/v1/incidents/${incident.body.data.incident_id}/triage`)
+      .set('Authorization', `Bearer ${coord.token}`)
+      .send({ confirmed_severity: 'CRITICAL' })
+
+    const data = await reporterNotified
+    expect(data.notification_type).toBe('INCIDENT_STATUS_UPDATE')
+    expect(data.notification_id).toMatch(/^NTF-/)
+  })
+})

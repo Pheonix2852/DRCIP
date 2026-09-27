@@ -5,8 +5,9 @@ import { requireRole } from '../middleware/auth';
 import prisma from '../lib/prisma';
 import { Prisma } from '@prisma/client';
 import { v4 as uuidv4 } from 'uuid';
-import { createIncidentSchema, incidentQuerySchema, triageSchema, resolveIncidentSchema } from '@drcip/contracts';
+import { createIncidentSchema, incidentQuerySchema, triageSchema, resolveIncidentSchema, type NotificationPriority } from '@drcip/contracts';
 import { WebSocketService } from '../services/WebSocketService';
+import { NotificationService, type CreatedNotification } from '../services/NotificationService';
 
 const router = Router();
 
@@ -367,6 +368,41 @@ router.patch('/:incidentId/triage', requireRole('DISASTER_COORDINATOR', 'ADMINIS
     // WebSocket broadcast only after durable transaction succeeds
     getWsService().publishIncidentUpdated(incident.id, incident.publicId, updated.status);
 
+    // Phase 7 — escalation + incident status notifications. Runs post-commit:
+    // the triage decision is already durable, and a notification failure must
+    // not roll it back. Escalation fires only on a newly applied HIGH/CRITICAL
+    // confirmed severity (dedupe keyed by incident + severity).
+    const rows: CreatedNotification[] = [];
+    if (
+      updated.confirmedSeverity &&
+      ['HIGH', 'CRITICAL'].includes(updated.confirmedSeverity) &&
+      updated.confirmedSeverity !== incident.confirmedSeverity
+    ) {
+      rows.push(
+        ...(await prisma.$transaction((tx) =>
+          NotificationService.notifyEscalation(tx, {
+            incidentId: incident.id,
+            incidentPublicId: incident.publicId,
+            severity: updated.confirmedSeverity as NotificationPriority,
+          }),
+        )),
+      );
+    }
+    if (updated.status !== incident.status) {
+      rows.push(
+        ...(await prisma.$transaction((tx) =>
+          NotificationService.notifyIncidentStatus(tx, {
+            incidentId: incident.id,
+            incidentPublicId: incident.publicId,
+            reporterUserId: incident.reporterUserId,
+            teamLeaderUserIds: [],
+            status: updated.status,
+          }),
+        )),
+      );
+    }
+    await NotificationService.afterCommit(rows);
+
     res.json({
       success: true,
       data: {
@@ -412,12 +448,25 @@ router.patch('/:incidentId/resolve', requireRole('DISASTER_COORDINATOR', 'ADMINI
       throw new AppError(422, 'ASSIGNMENTS_ACTIVE', `${active.length} assignment(s) are still active`);
     }
 
-    const [updated] = await prisma.$transaction([
-      prisma.incident.update({
+    const teamLeaderRows = await prisma.assignment.findMany({
+      where: { incidentId: incident.id, fieldTeamId: { not: null } },
+      select: { FieldTeam: { select: { leaderUserId: true } } },
+    });
+    const teamLeaderUserIds = [
+      ...new Set(
+        teamLeaderRows
+          .map((a) => a.FieldTeam?.leaderUserId)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    ];
+
+    const result = await prisma.$transaction(async (tx) => {
+      const up = await tx.incident.update({
         where: { id: incident.id },
         data: { status: 'RESOLVED', resolvedAt: new Date() },
-      }),
-      prisma.auditLog.create({
+      });
+
+      await tx.auditLog.create({
         data: {
           actorUserId: req.userId,
           action: 'INCIDENT_RESOLVE',
@@ -427,17 +476,30 @@ router.patch('/:incidentId/resolve', requireRole('DISASTER_COORDINATOR', 'ADMINI
           afterState: { status: 'RESOLVED' },
           metadata: { notes: body.notes, incident_public_id: incident.publicId },
         },
-      }),
-    ]);
+      });
+
+      // Phase 7 — the reporter and any assigned team leaders learn the outcome.
+      const rows = await NotificationService.notifyIncidentStatus(tx, {
+        incidentId: incident.id,
+        incidentPublicId: incident.publicId,
+        reporterUserId: incident.reporterUserId,
+        teamLeaderUserIds,
+        status: 'RESOLVED',
+      });
+
+      return { updated: up, rows };
+    });
+
+    await NotificationService.afterCommit(result.rows);
 
     getWsService().publishIncidentUpdated(incident.id, incident.publicId, 'RESOLVED');
 
     res.json({
       success: true,
       data: {
-        incident_id: updated.publicId,
-        status: updated.status,
-        resolved_at: updated.resolvedAt,
+        incident_id: result.updated.publicId,
+        status: result.updated.status,
+        resolved_at: result.updated.resolvedAt,
       },
     });
   } catch (err) {

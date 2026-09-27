@@ -3,29 +3,13 @@ import React from 'react'
 import { renderHook, render, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query'
 
-const h = vi.hoisted(() => {
-  const listeners = new Map<string, Set<(ev: MessageEvent) => void>>()
-  const ws = {
-    addEventListener: (type: string, cb: (ev: MessageEvent) => void) => {
-      if (!listeners.has(type)) listeners.set(type, new Set())
-      listeners.get(type)!.add(cb)
-    },
-    removeEventListener: (type: string, cb: (ev: MessageEvent) => void) => {
-      listeners.get(type)?.delete(cb)
-    },
-    dispatch: (type: string, payload: unknown) => {
-      const ev = new MessageEvent(type, { data: JSON.stringify(payload) })
-      listeners.get(type)?.forEach((cb) => cb(ev))
-    },
-  }
-  return { ws }
-})
-
-vi.mock('../contexts/AuthContext', () => ({
-  useAuth: () => ({ ws: h.ws }),
-}))
-
 import { useRealtime } from '../hooks/useRealtime'
+
+// The hook consumes raw socket frames bridged onto the window by AuthContext,
+// so tests dispatch 'drcip:ws-message' CustomEvents instead of mocking a socket.
+function dispatchWs(payload: unknown) {
+  window.dispatchEvent(new CustomEvent('drcip:ws-message', { detail: JSON.stringify(payload) }))
+}
 
 function setup() {
   const qc = new QueryClient()
@@ -40,20 +24,20 @@ function setup() {
 describe('useRealtime assignment invalidation', () => {
   it('invalidates assignments on assignment.created', () => {
     const spy = setup()
-    h.ws.dispatch('message', { event: 'assignment.created', version: 1, timestamp: '', data: { assignment_id: 'ASN-1', incident_id: 'INC-1' } })
+    dispatchWs({ event: 'assignment.created', version: 1, timestamp: '', data: { assignment_id: 'ASN-1', incident_id: 'INC-1' } })
     expect(spy).toHaveBeenCalledWith({ queryKey: ['assignments'] })
     expect(spy).toHaveBeenCalledWith({ queryKey: ['incident', 'INC-1'] })
   })
 
   it('invalidates assignments on assignment.updated', () => {
     const spy = setup()
-    h.ws.dispatch('message', { event: 'assignment.updated', version: 1, timestamp: '', data: { assignment_id: 'ASN-1', status: 'IN_PROGRESS', incident_id: 'INC-1' } })
+    dispatchWs({ event: 'assignment.updated', version: 1, timestamp: '', data: { assignment_id: 'ASN-1', status: 'IN_PROGRESS', incident_id: 'INC-1' } })
     expect(spy).toHaveBeenCalledWith({ queryKey: ['assignments'] })
   })
 
   it('does not invalidate capacity on assignment events', () => {
     const spy = setup()
-    h.ws.dispatch('message', { event: 'assignment.created', version: 1, timestamp: '', data: { assignment_id: 'ASN-1' } })
+    dispatchWs({ event: 'assignment.created', version: 1, timestamp: '', data: { assignment_id: 'ASN-1' } })
     expect(spy).not.toHaveBeenCalledWith({ queryKey: ['capacity'] })
   })
 })
@@ -73,7 +57,7 @@ describe('assignments query refetches end-to-end on realtime events', () => {
     )
 
     await waitFor(() => expect(queryFn).toHaveBeenCalledTimes(1))
-    h.ws.dispatch('message', { event: 'assignment.updated', version: 1, timestamp: '', data: { assignment_id: 'ASN-1', incident_id: 'INC-1' } })
+    dispatchWs({ event: 'assignment.updated', version: 1, timestamp: '', data: { assignment_id: 'ASN-1', incident_id: 'INC-1' } })
     await waitFor(() => expect(queryFn).toHaveBeenCalledTimes(2))
   })
 })

@@ -439,8 +439,11 @@ model Notification {
   channel          NotificationChannel
   notificationType String
   payload          Json
+  priority         NotificationPriority       @default(LOW)
   deliveryStatus   NotificationDeliveryStatus
   sentAt           DateTime?
+  readAt           DateTime?
+  dedupeKey        String?                    @unique
   createdAt        DateTime                   @default(now())
 
   // Relations
@@ -462,6 +465,13 @@ enum NotificationDeliveryStatus {
   PENDING
   SENT
   FAILED
+}
+
+enum NotificationPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
 }
 
 model WeatherObservation {

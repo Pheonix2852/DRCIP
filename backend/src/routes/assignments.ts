@@ -22,6 +22,7 @@ import {
   type ShelterAssignmentItemInput,
 } from '@drcip/contracts';
 import { WebSocketService } from '../services/WebSocketService';
+import { NotificationService, type CreatedNotification } from '../services/NotificationService';
 
 // Assignment reads: Field Officer (own team only), Coordinator, Administrator.
 const READ_ROLES = ['FIELD_OFFICER', 'DISASTER_COORDINATOR', 'ADMINISTRATOR'];
@@ -64,7 +65,7 @@ incidentAssignmentsRouter.post(
 
       const incident = await prisma.incident.findUnique({
         where: { publicId: req.params.incidentId },
-        select: { id: true, publicId: true, status: true },
+        select: { id: true, publicId: true, status: true, reporterUserId: true },
       });
       if (!incident) {
         throw new AppError(404, 'NOT_FOUND', 'Incident not found');
@@ -107,7 +108,7 @@ incidentAssignmentsRouter.post(
             })
           : Promise.resolve([]),
         teamItems.length
-          ? prisma.fieldTeam.findMany({ where: { publicId: { in: teamItems.map((i) => i.team_id) } }, select: { id: true, publicId: true } })
+          ? prisma.fieldTeam.findMany({ where: { publicId: { in: teamItems.map((i) => i.team_id) } }, select: { id: true, publicId: true, leaderUserId: true } })
           : Promise.resolve([]),
         shelterRefs.length
           ? prisma.shelter.findMany({ where: { publicId: { in: shelterRefs } }, select: { id: true, publicId: true } })
@@ -115,7 +116,7 @@ incidentAssignmentsRouter.post(
       ]);
 
       const resourceMap = new Map(resources.map((r) => [r.publicId, r.id]));
-      const teamMap = new Map(teams.map((t) => [t.publicId, t.id]));
+      const teamMap = new Map(teams.map((t) => [t.publicId, t]));
       const shelterMap = new Map(shelters.map((s) => [s.publicId, s.id]));
       const resourceQuantity = new Map(resources.map((r) => [r.publicId, Number(r.quantity)]));
 
@@ -139,7 +140,7 @@ incidentAssignmentsRouter.post(
         }
       }
 
-      const fieldTeamId = teamItems.length ? teamMap.get(teamItems[0].team_id)! : null;
+      const fieldTeamId = teamItems.length ? teamMap.get(teamItems[0].team_id)!.id : null;
 
       const created = await prisma.$transaction(async (tx) => {
         // Atomic availability/capacity transitions. Conditional UPDATEs make the
@@ -158,7 +159,7 @@ incidentAssignmentsRouter.post(
           } else if ('team_id' in item) {
             const affected = await tx.$executeRaw`
               UPDATE "FieldTeam" SET "status" = 'DEPLOYED', "updatedAt" = NOW()
-              WHERE "id" = ${teamMap.get(item.team_id)!} AND "status" = 'ACTIVE'
+              WHERE "id" = ${teamMap.get(item.team_id)!.id} AND "status" = 'ACTIVE'
             `;
             if (affected === 0) {
               throw new AppError(422, 'TEAM_UNAVAILABLE', `Field Team ${item.team_id} is not active`);
@@ -200,7 +201,7 @@ incidentAssignmentsRouter.post(
             assignmentId: assignment.id,
             resourceType: 'resource_id' in item ? item.resource_type : null,
             resourceId: 'resource_id' in item ? resourceMap.get(item.resource_id)! : null,
-            teamId: 'team_id' in item ? teamMap.get(item.team_id)! : null,
+            teamId: 'team_id' in item ? teamMap.get(item.team_id)!.id : null,
             shelterId: 'shelter_id' in item ? shelterMap.get(item.shelter_id)! : null,
             quantity: item.quantity,
           })),
@@ -238,12 +239,39 @@ incidentAssignmentsRouter.post(
           },
         });
 
+        // Phase 7 — notify the leading Field Officer, and (on the first
+        // assignment) the reporter + leader that the incident entered response.
+        const notificationRows: CreatedNotification[] = [];
+        const teamLeaderUserId = fieldTeamId ? teamMap.get(teamItems[0].team_id)!.leaderUserId : null;
+        notificationRows.push(
+          ...(await NotificationService.notifyAssignmentCreated(tx, {
+            incidentId: incident.id,
+            incidentPublicId: incident.publicId,
+            assignmentId: assignment.id,
+            assignmentPublicId: assignment.publicId,
+            teamLeaderUserId,
+          })),
+        );
+        if (incidentStatus !== incident.status) {
+          notificationRows.push(
+            ...(await NotificationService.notifyIncidentStatus(tx, {
+              incidentId: incident.id,
+              incidentPublicId: incident.publicId,
+              reporterUserId: incident.reporterUserId,
+              teamLeaderUserIds: teamLeaderUserId ? [teamLeaderUserId] : [],
+              status: incidentStatus,
+            })),
+          );
+        }
+
         const full = await tx.assignment.findUniqueOrThrow({
           where: { id: assignment.id },
           include: assignmentInclude,
         });
-        return { full, incidentStatus };
+        return { full, incidentStatus, notificationRows };
       });
+
+      await NotificationService.afterCommit(created.notificationRows);
 
       const ws = getWsService();
       ws.publishAssignmentCreated(created.full.publicId, incident.publicId);
@@ -254,7 +282,7 @@ incidentAssignmentsRouter.post(
         if ('resource_id' in item) {
           ws.publishResourceUpdated(resourceMap.get(item.resource_id)!, item.resource_id, 'ASSIGNED');
         } else if ('team_id' in item) {
-          ws.publishTeamUpdated(teamMap.get(item.team_id)!, item.team_id, 'DEPLOYED');
+          ws.publishTeamUpdated(teamMap.get(item.team_id)!.id, item.team_id, 'DEPLOYED');
         }
       }
 
@@ -357,11 +385,10 @@ assignmentsRouter.patch('/:assignmentId/status', requireRole(...WRITE_ROLES), as
       throw new AppError(422, 'INVALID_TRANSITION', `Cannot complete assignment from ${existing.status}`);
     }
 
-    const updated = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
       if (body.status === 'COMPLETED') {
-        return await completeAssignment(tx, existing.id);
-      }
-      if (body.status === 'CANCELLED') {
+        await completeAssignment(tx, existing.id);
+      } else if (body.status === 'CANCELLED') {
         // Atomically reverse operational state. Conditional updates avoid
         // clobbering state changed by another actor after assignment.
         for (const item of existing.items) {
@@ -424,19 +451,38 @@ assignmentsRouter.patch('/:assignmentId/status', requireRole(...WRITE_ROLES), as
         },
       });
 
-      return tx.assignment.findUniqueOrThrow({ where: { id: existing.id }, include: assignmentInclude });
+      // Phase 7 — reporter citizen + assigned team leader on genuine transitions.
+      const notificationRows: CreatedNotification[] = [];
+      if (existing.status !== body.status) {
+        notificationRows.push(
+          ...(await NotificationService.notifyAssignmentStatus(tx, {
+            incidentId: existing.incident.id,
+            incidentPublicId: existing.incident.publicId,
+            assignmentId: existing.id,
+            assignmentPublicId: existing.publicId,
+            reporterUserId: existing.incident.reporterUserId,
+            teamLeaderUserIds: existing.FieldTeam ? [existing.FieldTeam.leaderUserId] : [],
+            status: body.status,
+          })),
+        );
+      }
+
+      const assignment = await tx.assignment.findUniqueOrThrow({ where: { id: existing.id }, include: assignmentInclude });
+      return { assignment, notificationRows };
     });
 
+    await NotificationService.afterCommit(result.notificationRows);
+
     const ws = getWsService();
-    ws.publishAssignmentUpdated(updated.publicId, updated.incident.publicId, updated.status);
+    ws.publishAssignmentUpdated(result.assignment.publicId, result.assignment.incident.publicId, result.assignment.status);
     if (body.status === 'CANCELLED' || body.status === 'COMPLETED') {
-      for (const item of updated.items) {
+      for (const item of result.assignment.items) {
         if (item.resource?.publicId) ws.publishResourceUpdated(item.resourceId!, item.resource.publicId, 'AVAILABLE');
-        if (item.teamId && updated.FieldTeam) ws.publishTeamUpdated(item.teamId, updated.FieldTeam.publicId, 'ACTIVE');
+        if (item.teamId && result.assignment.FieldTeam) ws.publishTeamUpdated(item.teamId, result.assignment.FieldTeam.publicId, 'ACTIVE');
       }
     }
 
-    res.json({ success: true, data: serializeAssignment(updated) });
+    res.json({ success: true, data: serializeAssignment(result.assignment) });
   } catch (err) {
     next(err);
   }
@@ -466,8 +512,9 @@ assignmentsRouter.post('/:assignmentId/field-updates', requireRole('FIELD_OFFICE
     }
 
     let updated: AssignmentWithRelations;
+    const notificationRows: CreatedNotification[] = [];
     if (eventType === 'COMPLETED') {
-      updated = await prisma.$transaction(async (tx) => {
+      const result = await prisma.$transaction(async (tx) => {
         await tx.assignmentEvent.create({
           data: {
             assignmentId: existing.id,
@@ -487,8 +534,21 @@ assignmentsRouter.post('/:assignmentId/field-updates', requireRole('FIELD_OFFICE
             metadata: { assignment_public_id: existing.publicId, notes: body.notes },
           },
         });
-        return await completeAssignment(tx, existing.id);
+        const completed = await completeAssignment(tx, existing.id);
+        const rows = await NotificationService.notifyAssignmentStatus(tx, {
+          incidentId: existing.incident.id,
+          incidentPublicId: existing.incident.publicId,
+          assignmentId: existing.id,
+          assignmentPublicId: existing.publicId,
+          reporterUserId: existing.incident.reporterUserId,
+          teamLeaderUserIds: existing.FieldTeam ? [existing.FieldTeam.leaderUserId] : [],
+          status: 'COMPLETED',
+        });
+        return { assignment: completed, rows };
       });
+      updated = result.assignment;
+      notificationRows.push(...result.rows);
+      await NotificationService.afterCommit(notificationRows);
       const ws = getWsService();
       ws.publishAssignmentUpdated(updated.publicId, updated.incident.publicId, updated.status);
       for (const item of updated.items) {
@@ -529,7 +589,24 @@ assignmentsRouter.post('/:assignmentId/field-updates', requireRole('FIELD_OFFICE
           metadata: { assignment_public_id: existing.publicId, notes: body.notes },
         },
       });
+
+      // Phase 7 — the ASSIGNED -> IN_PROGRESS transition reaches reporter + leader.
+      if (eventType === 'IN_PROGRESS' && existing.status === 'ASSIGNED') {
+        notificationRows.push(
+          ...(await NotificationService.notifyAssignmentStatus(tx, {
+            incidentId: existing.incident.id,
+            incidentPublicId: existing.incident.publicId,
+            assignmentId: existing.id,
+            assignmentPublicId: existing.publicId,
+            reporterUserId: existing.incident.reporterUserId,
+            teamLeaderUserIds: existing.FieldTeam ? [existing.FieldTeam.leaderUserId] : [],
+            status: 'IN_PROGRESS',
+          })),
+        );
+      }
     });
+
+    await NotificationService.afterCommit(notificationRows);
 
     const after = await prisma.assignment.findUniqueOrThrow({
       where: { id: existing.id },

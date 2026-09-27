@@ -7,6 +7,10 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        destructive: {
+          DEFAULT: '#B42318',
+          foreground: '#FFFFFF',
+        },
         drcip: {
           primary: '#1e3a5f',
           secondary: '#2d6a4f',

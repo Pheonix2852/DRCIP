@@ -7,6 +7,7 @@ import { Input } from './ui/input'
 import { Select } from './ui/select'
 import { incidents, type IncidentSummary } from '../lib/incidents'
 import { capacity } from '../lib/capacity'
+import { severityColor } from '../lib/severityColor'
 import { MapPanel } from '../components/MapPanel'
 import { useRealtime } from '../hooks/useRealtime'
 import { useAuth } from '../contexts/AuthContext'
@@ -15,16 +16,6 @@ const STATUSES = ['REPORTED', 'TRIAGE_PENDING', 'IN_RESPONSE', 'RESOLVED']
 const DISASTER_TYPES = ['FLOOD', 'CYCLONE', 'FIRE', 'EARTHQUAKE', 'BUILDING_COLLAPSE', 'MEDICAL_EMERGENCY', 'ROAD_BLOCKAGE', 'LANDSLIDE']
 const SEVERITIES = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']
 const PAGE_SIZE = 10
-
-function severityColor(severity?: string): string {
-  switch (severity) {
-    case 'CRITICAL': return '#dc2626'
-    case 'HIGH': return '#ea580c'
-    case 'MEDIUM': return '#ca8a04'
-    case 'LOW': return '#2563eb'
-    default: return '#6b7280'
-  }
-}
 
 export function CoordinatorDashboard() {
   useRealtime()

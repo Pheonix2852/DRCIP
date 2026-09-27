@@ -93,14 +93,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       window.dispatchEvent(new Event('drcip:ws-reconnected'))
     }
 
-    socket.onclose = () => {
+    // Bridge raw socket frames onto a window event so message consumers never
+    // miss frames that arrive between socket open and a React effect listener
+    // registration (the pre-scroll-old registration race).
+    socket.onmessage = (ev: MessageEvent) => {
       if (!mountedRef.current) return
-      setWs(null)
-      setWsStatus('closed')
+      window.dispatchEvent(new CustomEvent('drcip:ws-message', { detail: ev.data }))
+    }
+
+    socket.onclose = () => {
+      // A close landing inside the StrictMode double-mount window (mountedRef
+      // briefly false) must still arm the reconnect; the state writes are guarded
+      // and the timer body re-checks mountedRef at fire time. Skipping scheduling
+      // here would leave the socket permanently dead and every WS-driven surface
+      // (bell badge included) frozen until a manual reload.
+      if (mountedRef.current) {
+        setWs(null)
+        setWsStatus('closed')
+      }
       if (isReconnect || isInitialized) {
         const delay = reconnectDelay.current
         reconnectDelay.current = Math.min(reconnectDelay.current * 2, MAX_RECONNECT_DELAY)
-        reconnectTimer.current = setTimeout(() => connectWebSocket(true), delay)
+        reconnectTimer.current = setTimeout(() => {
+          if (mountedRef.current) connectWebSocket(true)
+        }, delay)
       }
     }
 

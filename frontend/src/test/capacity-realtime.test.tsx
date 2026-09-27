@@ -3,29 +3,13 @@ import React from 'react'
 import { renderHook, render, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query'
 
-const h = vi.hoisted(() => {
-  const listeners = new Map<string, Set<(ev: MessageEvent) => void>>()
-  const ws = {
-    addEventListener: (type: string, cb: (ev: MessageEvent) => void) => {
-      if (!listeners.has(type)) listeners.set(type, new Set())
-      listeners.get(type)!.add(cb)
-    },
-    removeEventListener: (type: string, cb: (ev: MessageEvent) => void) => {
-      listeners.get(type)?.delete(cb)
-    },
-    dispatch: (type: string, payload: unknown) => {
-      const ev = new MessageEvent(type, { data: JSON.stringify(payload) })
-      listeners.get(type)?.forEach((cb) => cb(ev))
-    },
-  }
-  return { ws, listeners }
-})
-
-vi.mock('../contexts/AuthContext', () => ({
-  useAuth: () => ({ ws: h.ws }),
-}))
-
 import { useRealtime } from '../hooks/useRealtime'
+
+// The hook consumes raw socket frames bridged onto the window by AuthContext,
+// so tests dispatch 'drcip:ws-message' CustomEvents instead of mocking a socket.
+function dispatchWs(payload: unknown) {
+  window.dispatchEvent(new CustomEvent('drcip:ws-message', { detail: JSON.stringify(payload) }))
+}
 
 function wrapper(client: QueryClient) {
   return ({ children }: { children: React.ReactNode }) =>
@@ -42,27 +26,38 @@ function setup() {
 describe('useRealtime capacity invalidation', () => {
   it('invalidates the capacity query on resource.updated', () => {
     const spy = setup()
-    h.ws.dispatch('message', { event: 'resource.updated', version: 1, timestamp: '', data: { public_id: 'RES-1' } })
+    dispatchWs({ event: 'resource.updated', version: 1, timestamp: '', data: { public_id: 'RES-1' } })
     expect(spy).toHaveBeenCalledWith({ queryKey: ['capacity'] })
   })
 
   it('invalidates the capacity query on team.updated', () => {
     const spy = setup()
-    h.ws.dispatch('message', { event: 'team.updated', version: 1, timestamp: '', data: { public_id: 'TEAM-1' } })
+    dispatchWs({ event: 'team.updated', version: 1, timestamp: '', data: { public_id: 'TEAM-1' } })
     expect(spy).toHaveBeenCalledWith({ queryKey: ['capacity'] })
   })
 
   it('does not invalidate capacity on incident events', () => {
     const spy = setup()
-    h.ws.dispatch('message', { event: 'incident.created', version: 1, timestamp: '', data: { public_id: 'INC-1' } })
+    dispatchWs({ event: 'incident.created', version: 1, timestamp: '', data: { public_id: 'INC-1' } })
     expect(spy).toHaveBeenCalledWith({ queryKey: ['incidents'] })
     expect(spy).not.toHaveBeenCalledWith({ queryKey: ['capacity'] })
   })
 
+  it('invalidates the notification queries on notification.created', () => {
+    const spy = setup()
+    dispatchWs({ event: 'notification.created', version: 1, timestamp: '', data: { notification_id: 'NTF-1' } })
+    expect(spy).toHaveBeenCalledWith({ queryKey: ['notifications'] })
+  })
+
+  it('invalidates the notification queries on a reconnect (missed-event reconciliation)', () => {
+    const spy = setup()
+    window.dispatchEvent(new Event('drcip:ws-reconnected'))
+    expect(spy).toHaveBeenCalledWith({ queryKey: ['notifications'] })
+  })
+
   it('ignores malformed frames without throwing', () => {
     const spy = setup()
-    const ev = new MessageEvent('message', { data: 'not-json' })
-    h.listeners.get('message')?.forEach((cb) => cb(ev))
+    window.dispatchEvent(new CustomEvent('drcip:ws-message', { detail: 'not-json' }))
     expect(spy).not.toHaveBeenCalled()
   })
 })
@@ -80,7 +75,7 @@ describe('capacity query refetches end-to-end on realtime events', () => {
     render(React.createElement(QueryClientProvider, { client: qc }, React.createElement(CapacityHarness, { queryFn })))
 
     await waitFor(() => expect(queryFn).toHaveBeenCalledTimes(1))
-    h.ws.dispatch('message', { event: 'team.updated', version: 1, timestamp: '', data: { public_id: 'TEAM-1' } })
+    dispatchWs({ event: 'team.updated', version: 1, timestamp: '', data: { public_id: 'TEAM-1' } })
     await waitFor(() => expect(queryFn).toHaveBeenCalledTimes(2))
   })
 
@@ -90,7 +85,7 @@ describe('capacity query refetches end-to-end on realtime events', () => {
     render(React.createElement(QueryClientProvider, { client: qc }, React.createElement(CapacityHarness, { queryFn })))
 
     await waitFor(() => expect(queryFn).toHaveBeenCalledTimes(1))
-    h.ws.dispatch('message', { event: 'resource.updated', version: 1, timestamp: '', data: { public_id: 'RES-1' } })
+    dispatchWs({ event: 'resource.updated', version: 1, timestamp: '', data: { public_id: 'RES-1' } })
     await waitFor(() => expect(queryFn).toHaveBeenCalledTimes(2))
   })
 })

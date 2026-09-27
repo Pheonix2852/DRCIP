@@ -7,19 +7,10 @@ import { Label } from './ui/label'
 import { Select } from './ui/select'
 import { Textarea } from './ui/textarea'
 import { incidents } from '../lib/incidents'
+import { severityColor } from '../lib/severityColor'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { MapPanel } from '../components/MapPanel'
 import { useRealtime } from '../hooks/useRealtime'
-
-function severityColor(severity?: string): string {
-  switch (severity) {
-    case 'CRITICAL': return '#dc2626'
-    case 'HIGH': return '#ea580c'
-    case 'MEDIUM': return '#ca8a04'
-    case 'LOW': return '#2563eb'
-    default: return '#6b7280'
-  }
-}
 
 export function IncidentDetailsPage() {
   const { id } = useParams()

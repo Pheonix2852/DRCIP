@@ -14,6 +14,9 @@ import {
   ASSIGNMENT_STATUSES,
   ASSIGNMENT_EVENT_TYPES,
   ROLES,
+  NOTIFICATION_TYPES,
+  NOTIFICATION_PRIORITIES,
+  RECIPIENT_SCOPES,
 } from './domain';
 
 // Keep tuple types literal so z.enum infers the exact union, not `string`.
@@ -460,3 +463,61 @@ export const auditLogQuerySchema = z.object({
 });
 
 export type AuditLogQueryInput = z.infer<typeof auditLogQuerySchema>;
+
+// ---------------------------------------------------------------------------
+// Phase 7 — Notifications
+// See docs/05_API_Contract.md §12 and docs/02_Functional_Specification.md §11
+// ---------------------------------------------------------------------------
+
+const NOTIFICATION_TYPE_VALUES = Object.keys(NOTIFICATION_TYPES) as [
+  (typeof NOTIFICATION_TYPES)[keyof typeof NOTIFICATION_TYPES],
+  ...(typeof NOTIFICATION_TYPES)[keyof typeof NOTIFICATION_TYPES][],
+];
+const NOTIFICATION_PRIORITY_VALUES = Object.keys(NOTIFICATION_PRIORITIES) as [
+  (typeof NOTIFICATION_PRIORITIES)[keyof typeof NOTIFICATION_PRIORITIES],
+  ...(typeof NOTIFICATION_PRIORITIES)[keyof typeof NOTIFICATION_PRIORITIES][],
+];
+const RECIPIENT_SCOPE_VALUES = Object.keys(RECIPIENT_SCOPES) as [
+  (typeof RECIPIENT_SCOPES)[keyof typeof RECIPIENT_SCOPES],
+  ...(typeof RECIPIENT_SCOPES)[keyof typeof RECIPIENT_SCOPES][],
+];
+
+export const notificationTypeSchema = z.enum(NOTIFICATION_TYPE_VALUES);
+
+export const notificationPrioritySchema = z.enum(NOTIFICATION_PRIORITY_VALUES);
+
+export const recipientScopeSchema = z.enum(RECIPIENT_SCOPE_VALUES);
+
+export const notificationQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  unread_only: z.enum(['true', 'false']).optional(),
+  notification_type: notificationTypeSchema.optional(),
+  sort: z.enum(['newest', 'oldest']).default('newest'),
+});
+
+export type NotificationQueryInput = z.infer<typeof notificationQuerySchema>;
+
+export const broadcastNotificationSchema = z
+  .object({
+    message: z.string().trim().min(1, 'Message must not be empty').max(2000, 'Message must be at most 2000 characters'),
+    severity: notificationPrioritySchema,
+    recipient_scope: recipientScopeSchema,
+  })
+  .strict();
+
+export type BroadcastNotificationInput = z.infer<typeof broadcastNotificationSchema>;
+
+// ---------------------------------------------------------------------------
+// Phase 8 — Reports & Analytics
+// See docs/02_Functional_Specification.md §13 and docs/06_UI_UX_Specification.md §18
+// ---------------------------------------------------------------------------
+
+export const reportAnalyticsQuerySchema = z.object({
+  date_from: z.string().trim().max(50).optional(),
+  date_to: z.string().trim().max(50).optional(),
+  disaster_type: disasterTypeSchema.optional(),
+  response_zone_id: z.string().trim().max(100).optional(),
+});
+
+export type ReportAnalyticsQueryInput = z.infer<typeof reportAnalyticsQuerySchema>;

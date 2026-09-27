@@ -2,8 +2,7 @@
 // Re-exports intelligence contracts from api.ts for Node/Frontend consumption
 // Also defines health/version types specific to intelligence service
 
-import {
-  PredictionStatus,
+import type {
   SeverityPredictionRequest,
   SeverityPredictionResponse,
   DemandForecastRequest,
@@ -14,8 +13,10 @@ import {
   RagQueryResponse,
 } from './api';
 
+import type { PredictionStatus } from './domain';
+
 // Re-export intelligence contracts from api.ts (single source of truth)
-export {
+export type {
   PredictionStatus,
   SeverityPredictionRequest,
   SeverityPredictionResponse,

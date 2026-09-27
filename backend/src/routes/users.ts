@@ -2,7 +2,6 @@ import { Router } from 'express';
 import { Prisma } from '@prisma/client';
 import { requireRole } from '../middleware/auth';
 import { AppRequest } from '../middleware/index';
-import { AppError } from '../middleware/errorHandler';
 import prisma from '../lib/prisma';
 import { hashPassword } from '../lib/auth';
 import { v4 as uuidv4 } from 'uuid';
