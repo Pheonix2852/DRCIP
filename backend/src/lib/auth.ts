@@ -11,6 +11,7 @@ export interface JwtPayload {
   email: string;
   role: Role;
   name: string;
+  jti: string;
 }
 
 export async function hashPassword(password: string): Promise<string> {
@@ -37,4 +38,12 @@ export async function verifyToken(token: string): Promise<JwtPayload | null> {
   } catch {
     return null;
   }
+}
+
+export function isPasswordValid(password: string): { valid: boolean; reason?: string } {
+  if (password.length < 8) return { valid: false, reason: 'Password must be at least 8 characters' };
+  if (!/[A-Z]/.test(password)) return { valid: false, reason: 'Password must contain an uppercase letter' };
+  if (!/[a-z]/.test(password)) return { valid: false, reason: 'Password must contain a lowercase letter' };
+  if (!/[0-9]/.test(password)) return { valid: false, reason: 'Password must contain a digit' };
+  return { valid: true };
 }

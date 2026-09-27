@@ -3,7 +3,7 @@ import prisma from '../lib/prisma';
 
 const router = Router();
 
-router.get('/health', async (req, res) => {
+router.get('/', async (req, res) => {
   try {
     await prisma.$queryRaw`SELECT 1`;
     res.json({ status: 'healthy', database: 'connected', timestamp: new Date().toISOString() });

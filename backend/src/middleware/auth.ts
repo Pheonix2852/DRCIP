@@ -23,6 +23,16 @@ export async function verifyAuth(req: AppRequest, res: Response, next: NextFunct
     });
   }
 
+  // Session validation: the JWT must reference a non-revoked, non-expired session.
+  const session = await prisma.session.findUnique({ where: { publicId: payload.jti } });
+  if (!session || session.revokedAt || session.expiresAt < new Date()) {
+    return res.status(401).json({
+      success: false,
+      error: { code: 'SESSION_EXPIRED', message: 'Session has been revoked or expired' },
+      request_id: req.requestId,
+    });
+  }
+
   const user = await prisma.user.findUnique({ where: { id: payload.sub } });
   if (!user || !user.isActive) {
     return res.status(401).json({

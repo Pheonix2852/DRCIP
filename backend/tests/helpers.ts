@@ -1,4 +1,5 @@
 import bcrypt from 'bcryptjs'
+import { Prisma } from '@prisma/client'
 import prisma from '../src/lib/prisma'
 import request from 'supertest'
 import { createApp } from '../src/app'
@@ -64,7 +65,7 @@ export async function createIncident(token: string, overrides: Record<string, un
 
 export async function truncateTables() {
   await prisma.$executeRawUnsafe(
-    'TRUNCATE TABLE "AssignmentEvent", "AssignmentItem", "Assignment", "AllocationRecommendationItem", "AllocationRecommendation", "IncidentMedia", "SeverityPrediction", "Notification", "AuditLog", "Incident", "Resource", "FieldTeamMember", "FieldTeam", "Shelter", "User", "ResponseZone" RESTART IDENTITY CASCADE',
+    'TRUNCATE TABLE "AssignmentEvent", "AssignmentItem", "Assignment", "AllocationRecommendationItem", "AllocationRecommendation", "IncidentMedia", "SeverityPrediction", "Notification", "AuditLog", "Incident", "Resource", "FieldTeamMember", "FieldTeam", "Shelter", "Session", "PasswordResetToken", "WeatherObservation", "User", "ResponseZone" RESTART IDENTITY CASCADE',
   )
 }
 
@@ -173,7 +174,7 @@ export async function createTeam(
       name: overrides.name ?? 'Test Team',
       leaderUserId,
       status: overrides.status ?? 'ACTIVE',
-      capabilityProfile: overrides.capability_profile ?? {},
+      capabilityProfile: (overrides.capability_profile ?? {}) as unknown as Prisma.InputJsonValue,
     },
   })
 }

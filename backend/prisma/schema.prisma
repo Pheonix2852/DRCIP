@@ -24,14 +24,16 @@ model User {
   createdBy    String? // FK to users (admin who created)
 
   // Relations
-  teamLeader      FieldTeam?
-  incidents       Incident[]
-  assignments     Assignment[]
-  reviews         AllocationRecommendation[]
-  auditLogs       AuditLog[]
-  notifications   Notification[]
-  chatSessions    ChatSession[]
-  AssignmentEvent AssignmentEvent[]
+  teamLeader            FieldTeam?
+  incidents             Incident[]
+  assignments           Assignment[]
+  reviews               AllocationRecommendation[]
+  auditLogs             AuditLog[]
+  notifications         Notification[]
+  chatSessions          ChatSession[]
+  AssignmentEvent       AssignmentEvent[]
+  sessions              Session[]
+  passwordResetTokens   PasswordResetToken[]
 
   @@index([publicId])
   @@index([email])
@@ -586,6 +588,35 @@ model AuditLog {
   @@index([action])
   @@index([entityType, entityId])
   @@index([occurredAt])
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  publicId     String   @unique
+  userId       String
+  expiresAt    DateTime
+  revokedAt    DateTime?
+  createdAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([publicId])
+  @@index([expiresAt])
+}
+
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([tokenHash])
 }
 
 model PublicIdSequence {

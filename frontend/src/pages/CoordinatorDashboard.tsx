@@ -9,6 +9,7 @@ import { incidents, type IncidentSummary } from '../lib/incidents'
 import { capacity } from '../lib/capacity'
 import { severityColor } from '../lib/severityColor'
 import { MapPanel } from '../components/MapPanel'
+import { WeatherPanel } from '../components/WeatherPanel'
 import { useRealtime } from '../hooks/useRealtime'
 import { useAuth } from '../contexts/AuthContext'
 
@@ -140,78 +141,84 @@ export function CoordinatorDashboard() {
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Live Incidents</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <div className="text-center py-16 text-muted-foreground" role="status">Loading map...</div>
-            ) : error ? (
-              <div className="text-center py-16 text-destructive text-sm">{(error as Error).message || 'Failed to load incidents'}</div>
-            ) : markers.length === 0 ? (
-              <div className="text-center py-16 text-muted-foreground text-sm">No incidents with location to display.</div>
-            ) : (
-              <MapPanel center={[markers[0].lat, markers[0].lng]} zoom={6} markers={markers} height="h-80" />
-            )}
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="lg:col-span-2">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Live Incidents</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <div className="text-center py-16 text-muted-foreground" role="status">Loading map...</div>
+              ) : error ? (
+                <div className="text-center py-16 text-destructive text-sm">{(error as Error).message || 'Failed to load incidents'}</div>
+              ) : markers.length === 0 ? (
+                <div className="text-center py-16 text-muted-foreground text-sm">No incidents with location to display.</div>
+              ) : (
+                <MapPanel center={[markers[0].lat, markers[0].lng]} zoom={6} markers={markers} height="h-80" />
+              )}
+            </CardContent>
+          </Card>
+        </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Incident Queue ({data?.pagination?.total ?? 0})</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {isLoading ? (
-              <div className="text-center py-16 text-muted-foreground" role="status">Loading incidents...</div>
-            ) : error ? (
-              <div className="text-center py-16 text-destructive text-sm">{(error as Error).message || 'Failed to load incidents'}</div>
-            ) : items.length === 0 ? (
-              <div className="text-center py-16">
-                <p className="text-muted-foreground">No incidents match the current filters.</p>
-                <Button variant="outline" size="sm" className="mt-3" onClick={handleFiltersReset}>Clear filters</Button>
-              </div>
-            ) : (
-              <ul className="divide-y" role="list">
-                {items.map((inc) => (
-                  <li key={inc.id} className="py-3">
-                    <Link to={`/incidents/${inc.id}`} className="block hover:bg-muted/50 rounded-md p-2 -m-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="font-medium text-sm">{inc.id}</span>
-                        <span className="flex gap-1 flex-wrap justify-end">
-                          <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 text-xs">{inc.status}</span>
-                          {inc.confirmed_severity && (
-                            <span
-                              className="px-2 py-0.5 rounded-full text-white text-xs"
-                              style={{ backgroundColor: severityColor(inc.confirmed_severity) }}
-                            >
-                              {inc.confirmed_severity}
-                            </span>
-                          )}
-                        </span>
-                      </div>
-                      <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{inc.description}</p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {inc.disaster_type} • {new Date(inc.created_at).toLocaleString()}
-                        {inc.latitude != null && inc.longitude != null && ` • ${inc.latitude.toFixed(4)}, ${inc.longitude.toFixed(4)}`}
-                      </p>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            )}
-
-            {data && data.pagination.total_pages > 1 && (
-              <div className="flex items-center justify-between pt-2">
-                <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>Prev</Button>
-                <span className="text-sm text-muted-foreground">Page {data.pagination.page} of {data.pagination.total_pages} ({data.pagination.total} total)</span>
-                <Button variant="outline" size="sm" disabled={page >= data.pagination.total_pages} onClick={() => setPage((p) => p + 1)}>Next</Button>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        <div className="space-y-4">
+          <WeatherPanel latitude={markers[0]?.lat ?? null} longitude={markers[0]?.lng ?? null} />
+        </div>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Incident Queue ({data?.pagination?.total ?? 0})</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {isLoading ? (
+            <div className="text-center py-16 text-muted-foreground" role="status">Loading incidents...</div>
+          ) : error ? (
+            <div className="text-center py-16 text-destructive text-sm">{(error as Error).message || 'Failed to load incidents'}</div>
+          ) : items.length === 0 ? (
+            <div className="text-center py-16">
+              <p className="text-muted-foreground">No incidents match the current filters.</p>
+              <Button variant="outline" size="sm" className="mt-3" onClick={handleFiltersReset}>Clear filters</Button>
+            </div>
+          ) : (
+            <ul className="divide-y" role="list">
+              {items.map((inc) => (
+                <li key={inc.id} className="py-3">
+                  <Link to={`/incidents/${inc.id}`} className="block hover:bg-muted/50 rounded-md p-2 -m-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-medium text-sm">{inc.id}</span>
+                      <span className="flex gap-1 flex-wrap justify-end">
+                        <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 text-xs">{inc.status}</span>
+                        {inc.confirmed_severity && (
+                          <span
+                            className="px-2 py-0.5 rounded-full text-white text-xs"
+                            style={{ backgroundColor: severityColor(inc.confirmed_severity) }}
+                          >
+                            {inc.confirmed_severity}
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{inc.description}</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {inc.disaster_type} • {new Date(inc.created_at).toLocaleString()}
+                      {inc.latitude != null && inc.longitude != null && ` • ${inc.latitude.toFixed(4)}, ${inc.longitude.toFixed(4)}`}
+                    </p>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {data && data.pagination.total_pages > 1 && (
+            <div className="flex items-center justify-between pt-2">
+              <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>Prev</Button>
+              <span className="text-sm text-muted-foreground">Page {data.pagination.page} of {data.pagination.total_pages} ({data.pagination.total} total)</span>
+              <Button variant="outline" size="sm" disabled={page >= data.pagination.total_pages} onClick={() => setPage((p) => p + 1)}>Next</Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   )
 }

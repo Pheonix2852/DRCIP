@@ -20,6 +20,9 @@ import capacityRouter from './routes/capacity';
 import auditRouter from './routes/audit';
 import responseZonesRouter from './routes/responseZones';
 import reportsRouter from './routes/reports';
+import { healthRouter } from './routes/health';
+import weatherRouter from './routes/weather';
+import adminRouter from './routes/admin';
 
 export function createApp() {
   const app = express();
@@ -36,17 +39,15 @@ export function createApp() {
   app.use(express.urlencoded({ extended: true, limit: '10mb' }));
   app.use(morgan(process.env.NODE_ENV === 'development' ? 'dev' : 'combined'));
 
-  // Routes
-  app.get('/health', (req, res) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString() });
-  });
+  // Health / Version (unauthenticated)
+  app.use('/health', healthRouter);
 
+  // Routes
   app.use('/api/v1/auth', authRouter);
   app.use('/api/v1/users', verifyAuth, usersRouter);
   app.use('/api/v1/incidents', verifyAuth, incidentsRouter);
   app.use('/api/v1/incidents', verifyAuth, mediaRouter);
   app.use('/api/v1/incidents', verifyAuth, incidentAssignmentsRouter);
-// ...
   app.use('/api/v1/resources', verifyAuth, resourcesRouter);
   app.use('/api/v1/teams', verifyAuth, teamsRouter);
   app.use('/api/v1/shelters', verifyAuth, sheltersRouter);
@@ -58,6 +59,8 @@ export function createApp() {
   app.use('/api/v1/notifications', verifyAuth, notificationsRouter);
   app.use('/api/v1/me', verifyAuth, meRouter);
   app.use('/api/v1/audit-logs', verifyAuth, auditRouter);
+  app.use('/api/v1/weather', verifyAuth, weatherRouter);
+  app.use('/api/v1/admin', verifyAuth, adminRouter);
 
   // 404 handler
   app.use(notFoundHandler);

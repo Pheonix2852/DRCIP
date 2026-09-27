@@ -2,6 +2,7 @@ import { createHashRouter, createRoutesFromElements, Route } from "react-router-
 import { Layout } from "./pages/Layout";
 import { LoginPage } from "./pages/LoginPage";
 import { HomePage } from "./pages/HomePage";
+import { ResetPasswordPage } from "./pages/ResetPasswordPage";
 import {
   ReportIncidentPage,
   MyIncidentsPage,
@@ -41,6 +42,7 @@ export const router = createHashRouter(
     >
       <Route index element={<HomePage />} />
       <Route path="login" element={<LoginPage />} />
+      <Route path="reset-password" element={<ResetPasswordPage />} />
 
       <Route element={<PrivateRoute />}>
         <Route path="report" element={<ReportIncidentPage />} />
@@ -56,13 +58,17 @@ export const router = createHashRouter(
           <Route path="teams" element={<TeamsPage />} />
           <Route path="shelters" element={<SheltersPage />} />
           <Route path="reports" element={<ReportsPage />} />
-          <Route path="admin" element={<AdminDashboard />} />
-          <Route path="admin/audit" element={<AuditLogPage />} />
-          <Route path="health" element={<SystemHealthPage />} />
         </Route>
 
         <Route element={<RoleRoute allowedRoles={["ADMINISTRATOR"]} />}>
+          <Route path="admin" element={<AdminDashboard />} />
+          <Route path="admin/rag" element={<RAGChatPage />} />
           <Route path="admin/users" element={<UsersPage />} />
+          <Route path="admin/health" element={<SystemHealthPage />} />
+        </Route>
+
+        <Route element={<RoleRoute allowedRoles={["DISASTER_COORDINATOR", "ADMINISTRATOR"]} />}>
+          <Route path="admin/audit" element={<AuditLogPage />} />
         </Route>
 
         <Route element={<RoleRoute allowedRoles={["FIELD_OFFICER", "DISASTER_COORDINATOR", "ADMINISTRATOR"]} />}>
@@ -80,6 +86,6 @@ export const router = createHashRouter(
           <Route path="field/update" element={<FieldUpdatePage />} />
         </Route>
       </Route>
-    </Route>,
-  ),
+    </Route>
+  )
 );

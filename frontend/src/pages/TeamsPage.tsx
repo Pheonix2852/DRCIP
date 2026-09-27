@@ -33,7 +33,6 @@ export function TeamsPage() {
   const { user } = useAuth()
   const queryClient = useQueryClient()
   const canManage = canManageTeams(user?.role)
-  const isAdmin = user?.role === 'ADMINISTRATOR'
 
   const [statusFilter, setStatusFilter] = useState('')
   const [search, setSearch] = useState('')
@@ -63,16 +62,23 @@ export function TeamsPage() {
     placeholderData: (prev) => prev,
   })
 
-  // Admins can list users to build a leader picker; Coordinators cannot
-  // (GET /users is admin-only), so they enter the Field Officer public ID.
-  const { data: usersData } = useQuery({
-    queryKey: ['users', 'field-officers'],
+  // Eligible Field Officer leaders come from the role-scoped leader-candidates
+  // endpoint (Coordinator + Admin). It excludes officers already leading a team
+  // and keeps the current leader selectable when editing (exclude_team_id).
+  const { data: leaderCandidates, isLoading: loadingCandidates } = useQuery({
+    queryKey: ['teams', 'leader-candidates', editing?.id ?? null],
     queryFn: async () => {
-      const res = await api.get('/api/v1/users', { params: { limit: 100 } })
-      return (res.data?.data?.items ?? []) as UserSummary[]
+      const res = await api.get('/api/v1/admin/leader-candidates', { params: editing ? { exclude_team_id: editing.id } : {} })
+      return (res.data?.data ?? []) as UserSummary[]
     },
-    enabled: isAdmin,
+    enabled: formOpen && !editing ? true : false,
+    placeholderData: (prev) => prev,
   })
+
+  // When editing, the current leader must remain selectable.
+  const availableOfficers = editing
+    ? [...(leaderCandidates ?? []), ...(editing.leader ? [{ id: editing.leader.id, name: editing.leader.name, role: 'FIELD_OFFICER' as const, is_active: true }] : [])]
+    : leaderCandidates ?? []
 
   useEffect(() => {
     const onFocus = () => { refetch() }
@@ -106,11 +112,6 @@ export function TeamsPage() {
   })
 
   const items: TeamSummary[] = data?.items ?? []
-
-  const leadingOfficerIds = new Set(items.map((t) => t.leader.id))
-  const availableOfficers = (usersData ?? []).filter(
-    (u) => u.role === 'FIELD_OFFICER' && u.is_active && !leadingOfficerIds.has(u.id),
-  )
 
   const closeForm = () => {
     setFormOpen(false)
@@ -251,23 +252,16 @@ export function TeamsPage() {
               {!editing && (
                 <div>
                   <label className="block text-sm font-medium mb-1">Leader (Field Officer)</label>
-                  {isAdmin ? (
-                    <Select value={leaderUserId} onChange={(e) => setLeaderUserId(e.target.value)} data-testid="team-leader">
-                      <option value="">Select a Field Officer...</option>
-                      {availableOfficers.map((u) => (
-                        <option key={u.id} value={u.id}>{u.name} ({u.id})</option>
-                      ))}
-                    </Select>
-                  ) : (
-                    <Input
-                      value={leaderUserId}
-                      onChange={(e) => setLeaderUserId(e.target.value)}
-                      placeholder="Field Officer public ID (USR-...)"
-                      data-testid="team-leader"
-                    />
-                  )}
+                  <Select value={leaderUserId} onChange={(e) => setLeaderUserId(e.target.value)} data-testid="team-leader">
+                    <option value="">
+                      {loadingCandidates ? 'Loading candidates...' : 'Select a Field Officer...'}
+                    </option>
+                    {availableOfficers.map((u) => (
+                      <option key={u.id} value={u.id}>{u.name} ({u.id})</option>
+                    ))}
+                  </Select>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Officers already leading a team are excluded. The server validates the leader.
+                    Officers already leading another team are excluded. The server validates the leader.
                   </p>
                 </div>
               )}

@@ -9,7 +9,7 @@ interface AuthContextType {
   user: User | null
   token: string | null
   login: (credentials: LoginRequest) => Promise<void>
-  logout: () => void
+  logout: () => Promise<void>
   isAuthenticated: boolean
   isInitialized: boolean
   hasRole: (roles: Role[]) => boolean
@@ -93,20 +93,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       window.dispatchEvent(new Event('drcip:ws-reconnected'))
     }
 
-    // Bridge raw socket frames onto a window event so message consumers never
-    // miss frames that arrive between socket open and a React effect listener
-    // registration (the pre-scroll-old registration race).
     socket.onmessage = (ev: MessageEvent) => {
       if (!mountedRef.current) return
       window.dispatchEvent(new CustomEvent('drcip:ws-message', { detail: ev.data }))
     }
 
     socket.onclose = () => {
-      // A close landing inside the StrictMode double-mount window (mountedRef
-      // briefly false) must still arm the reconnect; the state writes are guarded
-      // and the timer body re-checks mountedRef at fire time. Skipping scheduling
-      // here would leave the socket permanently dead and every WS-driven surface
-      // (bell badge included) frozen until a manual reload.
       if (mountedRef.current) {
         setWs(null)
         setWsStatus('closed')
@@ -152,7 +144,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('drcip-auth', JSON.stringify({ token: access_token, user: fullUser }))
   }
 
-  const logout = () => {
+  const logout = async () => {
+    try {
+      await api.post('/api/v1/auth/logout')
+    } catch {
+      // Logout must never strand the user
+    }
     disconnectWebSocket()
     setToken(null)
     setUser(null)

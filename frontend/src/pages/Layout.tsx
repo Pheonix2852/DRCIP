@@ -44,7 +44,7 @@ export function Layout() {
     { label: "Admin", href: "/admin", roles: ["ADMINISTRATOR"] },
     { label: "Users", href: "/admin/users", roles: ["ADMINISTRATOR"] },
     { label: "Audit", href: "/admin/audit", roles: ["DISASTER_COORDINATOR", "ADMINISTRATOR"] },
-    { label: "Health", href: "/health", roles: ["DISASTER_COORDINATOR", "ADMINISTRATOR"] },
+    { label: "Health", href: "/admin/health", roles: ["ADMINISTRATOR"] },
   ];
 
   const visibleItems = navItems.filter((item) => user && item.roles.includes(user.role));
@@ -86,9 +86,11 @@ export function Layout() {
                 </Button>
               </Link>
             )}
-            <Button variant="ghost" size="icon">
-              <User className="h-5 w-5" />
-            </Button>
+            <Link to="/profile" aria-label="Profile">
+              <Button variant="ghost" size="icon">
+                <User className="h-5 w-5" />
+              </Button>
+            </Link>
             <Button variant="ghost" size="icon" onClick={logout}>
               <LogOut className="h-5 w-5" />
             </Button>
