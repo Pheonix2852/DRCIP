@@ -1,7 +1,8 @@
 import api from './api'
+import type { LatestPrediction, SeverityLevel, DisasterType, IncidentStatus } from '@drcip/contracts'
 
 export interface CreateIncidentRequest {
-  disaster_type: string
+  disaster_type: DisasterType
   description: string
   latitude: number
   longitude: number
@@ -16,19 +17,19 @@ export interface CreateIncidentResponse {
 }
 
 export interface TriageRequest {
-  confirmed_severity: string
+  confirmed_severity: SeverityLevel
   notes?: string
 }
 
 export interface IncidentSummary {
   id: string
-  disaster_type: string
+  disaster_type: DisasterType
   description: string
   people_affected: number
   emergency_contact_number: string
-  status: string
-  predicted_severity?: string
-  confirmed_severity?: string
+  status: IncidentStatus
+  predicted_severity?: SeverityLevel
+  confirmed_severity?: SeverityLevel
   created_at: string
   updated_at: string
   latitude?: number
@@ -42,7 +43,7 @@ export interface IncidentSummary {
 export interface IncidentDetails {
   id: string
   reporter_user_id: string
-  disaster_type: string
+  disaster_type: DisasterType
   description: string
   people_affected: number
   emergency_contact_number: string
@@ -52,20 +53,14 @@ export interface IncidentDetails {
   state?: string
   district?: string
   response_zone?: string
-  predicted_severity?: string
-  confirmed_severity?: string
-  status: string
+  predicted_severity?: SeverityLevel
+  confirmed_severity?: SeverityLevel
+  latest_prediction?: LatestPrediction
+  status: IncidentStatus
   resolved_at?: string
   created_at: string
   updated_at: string
   media?: { id: string; media_type: string; secure_url: string; mime_type: string }[]
-  latest_prediction?: {
-    severity?: string
-    confidence?: string
-    model_version?: string
-    status?: string
-    generated_at?: string
-  }
 }
 
 export interface MediaUploadResponse {

@@ -122,13 +122,12 @@ DRCIP/
 │   │   ├── routes/
 │   │   │   ├── auth.ts           # Authentication routes
 │   │   │   ├── users.ts          # User management
-│   │   │   ├── incidents.ts      # Incident API
+│   │   │   ├── incidents.ts      # Incident + severity prediction
 │   │   │   ├── resources.ts      # Resources API
 │   │   │   ├── teams.ts          # Team management
 │   │   │   ├── shelters.ts       # Shelter management
 │   │   │   ├── assignments.ts    # Assignments API
 │   │   │   ├── notifications.ts  # Notifications API
-│   │   │   ├── internal.ts       # FastAPI integration gateway
 │   │   │   └── health.ts         # Health checks
 │   │   ├── services/
 │   │   │   ├── IntelligenceClient.ts  # FastAPI client
@@ -152,20 +151,9 @@ DRCIP/
 │   ├── pyproject.toml
 │   └── .env                      # Environment configuration
 │
-├── docs/                         # Authoritative specifications
-│   ├── 01_PRD.md
-│   ├── 02_Functional_Specification.md
-│   ├── 03_System_Architecture.md
-│   ├── 04_Database_Schema.md
-│   ├── 05_API_Contract.md
-│   ├── 06_UI_UX_Specification.md
-│   ├── 07_Acceptance_Criteria.md
-│   └── 08_Coding_Standards_Project_Conventions.md
-│
 ├── install.sh                    # Dependency installer
 ├── verify-setup.sh                # Verification script
 ├── package.json                  # Root workspace configuration
-└── AGENTS.md                     # OpenCode agent instructions
 ```
 
 ## Development Commands
@@ -258,6 +246,9 @@ This verifies:
 - `/api/v1/notifications` - Notifications
 
 ### Intelligence Service endpoints (internal)
+
+Server-side (Node → FastAPI) only; not public API.
+
 - `/internal/v1/predict/severity` - Severity prediction
 - `/internal/v1/forecast/demand` - Demand forecasting
 - `/internal/v1/optimize/allocation` - Allocation optimization

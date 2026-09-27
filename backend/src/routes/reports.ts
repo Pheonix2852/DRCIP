@@ -19,7 +19,7 @@ const analyticsGuard = requireRole('DISASTER_COORDINATOR', 'ADMINISTRATOR');
 const SNAPSHOT_LABEL = 'current snapshot';
 
 const DEGRADED_PREDICTION_MESSAGE =
-  'AI prediction performance metrics are unavailable. Prediction outputs are not currently persisted in the database.';
+  'AI prediction-accuracy metrics are not yet computed. Severity predictions are persisted on incident creation.';
 
 type TimeStat = ReportAnalyticsResponse['response_times']['time_to_assign_ms'];
 

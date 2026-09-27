@@ -18,7 +18,6 @@ export default defineConfig({
     host: '0.0.0.0',
     proxy: {
       '/api': 'http://localhost:5000',
-      '/internal': 'http://localhost:5000',
       '/ws': 'http://localhost:5000',
     },
   },

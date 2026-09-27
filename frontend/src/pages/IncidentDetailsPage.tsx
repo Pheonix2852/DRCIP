@@ -11,6 +11,7 @@ import { severityColor } from '../lib/severityColor'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { MapPanel } from '../components/MapPanel'
 import { useRealtime } from '../hooks/useRealtime'
+import type { SeverityLevel } from '@drcip/contracts'
 
 export function IncidentDetailsPage() {
   const { id } = useParams()
@@ -29,7 +30,7 @@ export function IncidentDetailsPage() {
   })
 
   const triageMutation = useMutation({
-    mutationFn: (payload: { confirmed_severity: string; notes?: string }) =>
+    mutationFn: (payload: { confirmed_severity: SeverityLevel; notes?: string }) =>
       incidents.triage(id!, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['incident', id] })
@@ -47,7 +48,7 @@ export function IncidentDetailsPage() {
     const form = e.target as HTMLFormElement
     const data = new FormData(form)
     const payload = {
-      confirmed_severity: data.get('confirmed_severity') as string,
+      confirmed_severity: data.get('confirmed_severity') as SeverityLevel,
       notes: data.get('notes') as string | undefined,
     }
     if (!payload.confirmed_severity) {
@@ -72,7 +73,8 @@ export function IncidentDetailsPage() {
   if (!data) return null
 
   const incident = data
-  const severity = incident.confirmed_severity || incident.predicted_severity
+  const prediction = incident.latest_prediction
+  const predictionSuccess = prediction?.status === 'SUCCESS' && prediction.severity
   const hasLocation = incident.latitude != null && incident.longitude != null
 
   return (
@@ -87,9 +89,17 @@ export function IncidentDetailsPage() {
             <span className="px-2 py-1 rounded-full bg-blue-100 text-blue-800 text-xs font-medium">{incident.status}</span>
           </div>
           {isCoordinator && (
-            <div className="flex items-center gap-2 mt-2 bg-amber-50 text-amber-800 rounded-md px-3 py-2 text-sm" role="status">
-              Severity prediction is unavailable — manual triage determines the operational response.
-            </div>
+            predictionSuccess ? (
+              <div className="flex items-center gap-2 mt-2 bg-green-50 text-green-800 rounded-md px-3 py-2 text-sm" role="status">
+                AI severity prediction: <strong data-testid="predicted-severity">{prediction.severity}</strong>
+                {prediction.confidence && <span className="text-green-600"> ({(parseFloat(prediction.confidence) * 100).toFixed(0)}% confidence)</span>}
+                <span className="text-green-600"> — review and confirm via manual triage.</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 mt-2 bg-amber-50 text-amber-800 rounded-md px-3 py-2 text-sm" role="status">
+                Severity prediction is temporarily unavailable. You can manually triage this incident.
+              </div>
+            )
           )}
         </CardHeader>
         <CardContent className="space-y-4">
@@ -112,13 +122,24 @@ export function IncidentDetailsPage() {
             </div>
             <div>
               <p className="text-sm font-medium text-muted-foreground">Severity</p>
-              <p>
-                {severity ? (
-                  <span className="px-2 py-0.5 rounded-full text-white text-xs" style={{ backgroundColor: severityColor(severity) }}>{severity}</span>
-                ) : (
-                  <span className="text-muted-foreground">Not set</span>
-                )}
-              </p>
+              <div className="space-y-1">
+                <p>
+                  <span className="text-xs text-muted-foreground mr-1">Confirmed:</span>
+                  {incident.confirmed_severity ? (
+                    <span className="px-2 py-0.5 rounded-full text-white text-xs" style={{ backgroundColor: severityColor(incident.confirmed_severity) }}>{incident.confirmed_severity}</span>
+                  ) : (
+                    <span className="text-muted-foreground text-xs">Not triaged</span>
+                  )}
+                </p>
+                <p>
+                  <span className="text-xs text-muted-foreground mr-1">Predicted:</span>
+                  {predictionSuccess ? (
+                    <span className="px-2 py-0.5 rounded-full text-white text-xs" style={{ backgroundColor: severityColor(prediction.severity!) }}>{prediction.severity}</span>
+                  ) : (
+                    <span className="text-muted-foreground text-xs">N/A</span>
+                  )}
+                </p>
+              </div>
             </div>
           </div>
 
@@ -128,7 +149,7 @@ export function IncidentDetailsPage() {
               <MapPanel
                 center={[incident.latitude as number, incident.longitude as number]}
                 zoom={13}
-                markers={[{ id: incident.id, lat: incident.latitude as number, lng: incident.longitude as number, label: incident.id, severity, status: incident.status }]}
+                markers={[{ id: incident.id, lat: incident.latitude as number, lng: incident.longitude as number, label: incident.id, severity: incident.confirmed_severity || prediction?.severity, status: incident.status }]}
                 height="h-64"
               />
               <p className="text-xs text-muted-foreground mt-1">

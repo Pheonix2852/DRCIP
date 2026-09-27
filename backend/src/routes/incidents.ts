@@ -5,9 +5,13 @@ import { requireRole } from '../middleware/auth';
 import prisma from '../lib/prisma';
 import { Prisma } from '@prisma/client';
 import { v4 as uuidv4 } from 'uuid';
-import { createIncidentSchema, incidentQuerySchema, triageSchema, resolveIncidentSchema, type NotificationPriority } from '@drcip/contracts';
+import { createIncidentSchema, incidentQuerySchema, triageSchema, resolveIncidentSchema, type NotificationPriority, type DisasterType } from '@drcip/contracts';
 import { WebSocketService } from '../services/WebSocketService';
 import { NotificationService, type CreatedNotification } from '../services/NotificationService';
+import { IntelligenceClient } from '../services/IntelligenceClient';
+import { publicId } from '../lib/publicId';
+
+const intelligence = new IntelligenceClient();
 
 const router = Router();
 
@@ -18,6 +22,60 @@ const getWsService = () => {
     return { publishIncidentCreated: () => {}, publishIncidentUpdated: () => {} };
   }
 };
+
+// Phase 9 — persist severity prediction after incident creation.
+// Intelligence failure must never block incident persistence (REST authoritative).
+async function persistSeverityPrediction(
+  incidentId: string,
+  body: { description: string; people_affected: number; disaster_type: DisasterType; latitude: number; longitude: number },
+  incidentPublicId: string,
+) {
+  const request = {
+    incident_id: incidentPublicId,
+    description: body.description,
+    people_affected: body.people_affected,
+    disaster_type: body.disaster_type,
+    latitude: body.latitude,
+    longitude: body.longitude,
+  };
+
+  let response;
+  try {
+    response = await intelligence.predictSeverity(request);
+  } catch {
+    // Unexpected client failure (not translated by IntelligenceClient)
+    response = { status: 'ERROR' as const, incident_id: incidentPublicId };
+  }
+
+  const predictionStatus = response.status;
+  const isPredictionSuccess = predictionStatus === 'SUCCESS' && response.severity;
+
+  try {
+    await prisma.severityPrediction.create({
+      data: {
+        publicId: publicId('PRED'),
+        incidentId,
+        severity: isPredictionSuccess ? response.severity : null,
+        confidence: response.confidence ?? null,
+        modelVersion: response.model_version ?? null,
+        predictionId: response.prediction_id ?? null,
+        predictionStatus,
+        explanation: (response.explanation as Prisma.InputJsonValue) ?? undefined,
+        inputReference: request as unknown as Prisma.InputJsonValue,
+        generatedAt: response.generated_at ? new Date(response.generated_at) : null,
+      },
+    });
+
+    if (isPredictionSuccess) {
+      await prisma.incident.update({
+        where: { id: incidentId },
+        data: { predictedSeverity: response.severity },
+      });
+    }
+  } catch {
+    // Prediction persistence failure must never fail the incident create response.
+  }
+}
 
 // POST /api/v1/incidents — Citizen or Field Officer
 router.post('/', async (req: AppRequest, res, next) => {
@@ -85,6 +143,10 @@ router.post('/', async (req: AppRequest, res, next) => {
 
       return created;
     });
+
+    // Phase 9 — persist severity prediction after the incident is durably committed.
+    // Prediction failure never fails the incident create response (REST authoritative).
+    await persistSeverityPrediction(incident.id, body, incident.publicId).catch(() => {});
 
     // WebSocket broadcast only after successful persistence
     getWsService().publishIncidentCreated(incident.id, incident.publicId);

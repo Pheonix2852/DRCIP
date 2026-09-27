@@ -21,8 +21,6 @@ import auditRouter from './routes/audit';
 import responseZonesRouter from './routes/responseZones';
 import reportsRouter from './routes/reports';
 
-import { initializeInternalRoutes } from './routes/internal';
-
 export function createApp() {
   const app = express();
 
@@ -60,9 +58,6 @@ export function createApp() {
   app.use('/api/v1/notifications', verifyAuth, notificationsRouter);
   app.use('/api/v1/me', verifyAuth, meRouter);
   app.use('/api/v1/audit-logs', verifyAuth, auditRouter);
-
-  // Internal intelligence routes (Node -> FastAPI)
-  app.use('/internal/v1', initializeInternalRoutes());
 
   // 404 handler
   app.use(notFoundHandler);

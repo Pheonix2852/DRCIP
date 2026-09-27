@@ -119,6 +119,14 @@ export interface IncidentSummary {
   created_at: string;
 }
 
+export interface LatestPrediction {
+  severity?: SeverityLevel;
+  confidence?: string;
+  model_version?: string;
+  status: PredictionStatus;
+  generated_at?: string;
+}
+
 export interface IncidentDetails {
   id: string;
   public_id: string;
@@ -134,6 +142,7 @@ export interface IncidentDetails {
   district?: string;
   predicted_severity?: SeverityLevel;
   confirmed_severity?: SeverityLevel;
+  latest_prediction?: LatestPrediction;
   status: IncidentStatus;
   resolved_at?: string;
   created_at: string;

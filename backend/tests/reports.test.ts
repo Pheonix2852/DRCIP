@@ -385,7 +385,7 @@ describe('Reports — prediction degradation', () => {
     expect(prediction.triage_ratio).toBe(1);
     expect(prediction.severity_distribution).toEqual({ CRITICAL: 2 });
     expect(prediction.prediction_available).toBe(false);
-    expect(prediction.degraded_message).toContain('Prediction outputs are not currently persisted');
+    expect(prediction.degraded_message).toContain('AI prediction-accuracy metrics are not yet computed');
   });
 
   it('returns a zero triage ratio when no incidents exist', async () => {
