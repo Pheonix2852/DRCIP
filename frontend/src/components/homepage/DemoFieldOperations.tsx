@@ -1,4 +1,10 @@
+import { useRef } from 'react'
+import gsap from 'gsap'
+import { useGSAP } from '@gsap/react'
 import { FIELD_TEAM, FIELD_ASSIGNMENT, DEMO_TEAMS, REGION } from './demo-data'
+import { prefersReducedMotion } from './homeMotion'
+
+gsap.registerPlugin(useGSAP)
 
 const STATUS_LABEL: Record<string, string> = {
   EN_ROUTE: 'En route',
@@ -12,7 +18,8 @@ function Track({ value, tone }: { value: number; tone?: 'accent' | 'plain' }) {
     <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[var(--home-track)]">
       <div
         className={`h-full rounded-full ${tone === 'plain' ? 'bg-[var(--text-muted)]' : 'bg-[var(--home-accent)]'}`}
-        style={{ width: `${value}%` }}
+        style={{ width: `${value}%`, transformOrigin: 'left center' }}
+        data-progress={value}
       />
     </div>
   )
@@ -20,8 +27,27 @@ function Track({ value, tone }: { value: number; tone?: 'accent' | 'plain' }) {
 
 /** Framed Field-Officer surface — my team, active assignment, tracked teams. */
 export function DemoFieldOperations() {
+  const ref = useRef<HTMLDivElement>(null)
+
+  useGSAP(() => {
+    if (prefersReducedMotion()) return
+    const bars = ref.current?.querySelectorAll('[data-progress]')
+    if (!bars || bars.length === 0) return
+    gsap.fromTo(
+      bars,
+      { scaleX: 0 },
+      {
+        scaleX: 1,
+        duration: 0.8,
+        ease: 'power2.out',
+        stagger: 0.12,
+        scrollTrigger: { trigger: ref.current, start: 'top 80%', once: true },
+      },
+    )
+  }, { scope: ref })
+
   return (
-    <div className="surface-frame">
+    <div ref={ref} className="surface-frame">
       <div className="surface-bar">
         <p className="home-mono">FIELD OPERATIONS · {REGION.label.toUpperCase()}</p>
         <span className="status-pill st-go">
@@ -62,7 +88,7 @@ export function DemoFieldOperations() {
           <p className="home-mono">{REGION.label.toUpperCase()} · TEAMS</p>
           <ul className="mt-2 space-y-2" role="list">
             {DEMO_TEAMS.map((t) => (
-              <li key={t.id} className="flex items-center gap-3 rounded-drcip-md border border-border bg-surface px-3 py-2.5">
+              <li key={t.id} className="flex items-center gap-3 rounded-drcip-md border border-border bg-surface px-3 py-2.5 transition-transform duration-150 hover:-translate-y-0.5">
                 <span className="home-mono w-9 flex-none">{t.id}</span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[13px] text-ink">

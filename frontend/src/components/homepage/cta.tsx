@@ -29,3 +29,8 @@ export function SecondaryCtaLink({ className, children, ...props }: ComponentPro
     </Link>
   )
 }
+
+/** Arrow glyph used inside CTAs for micro-interaction. */
+export function CtaArrow() {
+  return <span className="cta-arrow" aria-hidden="true">→</span>
+}

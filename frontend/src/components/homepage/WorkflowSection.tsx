@@ -42,10 +42,10 @@ export function WorkflowSection() {
           description="One engineered process, four accountable steps. Each hand-off is recorded in the operational record."
         />
 
-        <ol data-reveal className="mt-16 grid grid-cols-1 gap-10 md:grid-cols-4 md:gap-0 md:divide-x md:divide-[var(--border)]">
+        <ol className="mt-16 grid grid-cols-1 gap-10 md:grid-cols-4 md:gap-0 md:divide-x md:divide-[var(--border)]">
           {STEPS.map((step) => (
-            <li key={step.n} className="border-t border-border pt-6 md:border-t-0 md:px-8 md:first:pl-0 md:last:pr-0">
-              <span className="home-mono">STEP {step.n}</span>
+            <li key={step.n} data-reveal className="wf-step border-t border-border pt-6 md:border-t-0 md:px-8 md:first:pl-0 md:last:pr-0">
+              <span className="wf-step-num home-mono">STEP {step.n}</span>
               <h3 className="mt-3 text-xl font-medium tracking-tight text-ink">{step.title}</h3>
               <p className="mt-2 max-w-xs text-sm leading-relaxed text-text-secondary">{step.copy}</p>
             </li>

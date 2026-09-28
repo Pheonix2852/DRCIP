@@ -1,6 +1,9 @@
 {
   "name": "drcip",
   "version": "1.0.0",
+  "allowScripts": {
+    "react-day-picker": "true"
+  },
   "private": true,
   "workspaces": [
     "frontend",

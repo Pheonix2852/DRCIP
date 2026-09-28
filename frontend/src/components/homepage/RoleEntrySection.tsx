@@ -33,7 +33,7 @@ const ROLES = [
  */
 function RoleCard({ role, description, Icon }: (typeof ROLES)[number]) {
   return (
-    <li data-testid="role-card" className="flex flex-col border-t border-border pt-7 lg:border-l lg:border-t-0 lg:px-7 lg:pt-0 first:lg:border-l-0 first:lg:pl-0 lg:last:pr-0">
+    <li data-reveal data-testid="role-card" className="role-card flex flex-col border-t border-border pt-7 lg:border-l lg:border-t-0 lg:px-7 lg:pt-0 first:lg:border-l-0 first:lg:pl-0 lg:last:pr-0">
       <span className="flex h-11 w-11 items-center justify-center rounded-drcip-md border border-border bg-surface">
         <Icon className="h-5 w-5 text-cobalt-deep" aria-hidden="true" />
       </span>
@@ -43,7 +43,7 @@ function RoleCard({ role, description, Icon }: (typeof ROLES)[number]) {
         to="/login"
         className="mt-6 inline-flex min-h-11 items-center justify-start gap-1.5 self-start text-sm font-medium text-cobalt-deep transition-colors hover:text-cobalt-electric focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cobalt-electric"
       >
-        Sign In →
+        Sign In <span className="role-cta-arrow" aria-hidden="true">→</span>
       </Link>
     </li>
   )
@@ -67,7 +67,6 @@ export function RoleEntrySection() {
         />
 
         <ul
-          data-reveal
           className="mt-14 grid grid-cols-1 gap-x-12 gap-y-10 sm:grid-cols-2 lg:grid-cols-4"
         >
           {ROLES.map((role) => (

@@ -1,8 +1,10 @@
-/* Fictional, static demonstration data for the public homepage product
+/* Fictional, deterministic demonstration data for the public homepage product
    previews (Command Center / Field Operations / Reports). Never mixed with
-   live API modules; values are coherent across surfaces. No backend calls. */
+   live API modules; values are coherent across surfaces and computed from a
+   fixed matrix — no randomness, no timers. No backend calls. */
 
 export type Severity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
+export type DemoStatus = 'Reported' | 'In response' | 'Resolved'
 
 export interface DemoIncident {
   id: string
@@ -53,31 +55,153 @@ export const DEMO_TEAMS: DemoTrackedTeam[] = [
 export const FIELD_TEAM: DemoTrackedTeam = DEMO_TEAMS[2]
 export const FIELD_ASSIGNMENT: DemoIncident = DEMO_INCIDENTS[0]
 
+/** Command-center KPIs — coherent with the Reports matrix below. */
 export const KPI = {
-  incidents24h: 12,
-  open: 6,
+  incidents24h: 7,
+  open: 5,
   teamsDeployed: 3,
   medianResponseMin: 18,
 } as const
 
 export const SEVERITY_ORDER: Severity[] = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']
 
-export const REPORT_DAILY = {
-  labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-  reported: [4, 7, 5, 9, 11, 8, 12],
-} as const
+/* ------------------------------------------------------------
+   Deterministic Reports matrix.
+   Every KPI and chart on the Reports preview derives from the
+   STATUS × SEVERITY incident matrix below, so filtering a
+   status or severity re-derives all four surfaces coherently.
+   All arithmetic is pure; there is no randomness or timers.
+   ------------------------------------------------------------ */
 
-/** Donut — open incidents by severity (sums to the 5 listed incidents + 1). */
-export const REPORT_SEVERITY: { severity: Severity; count: number }[] = [
-  { severity: 'CRITICAL', count: 1 },
-  { severity: 'HIGH', count: 2 },
-  { severity: 'MEDIUM', count: 1 },
-  { severity: 'LOW', count: 1 },
-]
+/** Incidents (24h) by status × severity. All statuses ⇒ reported=7, open=5. */
+const CELLS: Record<DemoStatus, Record<Severity, number>> = {
+  Reported: { CRITICAL: 0, HIGH: 0, MEDIUM: 1, LOW: 1 },
+  'In response': { CRITICAL: 1, HIGH: 2, MEDIUM: 0, LOW: 0 },
+  Resolved: { CRITICAL: 0, HIGH: 1, MEDIUM: 1, LOW: 0 },
+}
 
-/** Bar — listed incidents by pilot-region zone. */
-export const REPORT_ZONES: { zone: string; count: number }[] = [
-  { zone: 'Riverside', count: 2 },
-  { zone: 'North', count: 2 },
-  { zone: 'Old market', count: 1 },
-]
+/** Open incidents distributed to pilot zones (per-severity bases sum to open). */
+const SEV_ZONES: Record<Severity, { zone: string; count: number }[]> = {
+  CRITICAL: [{ zone: 'Old market', count: 1 }],
+  HIGH: [{ zone: 'Riverside', count: 2 }],
+  MEDIUM: [{ zone: 'North', count: 1 }],
+  LOW: [{ zone: 'North', count: 1 }],
+}
+
+const DAILY_7 = [0, 1, 1, 2, 1, 1, 1]
+const DAILY_30 = [0, 1, 1, 2, 0, 1, 1, 1, 2, 1, 0, 1, 1, 0, 1, 0, 2, 1, 1, 0, 1, 1, 1, 0, 2, 1, 1, 0, 1, 1] as const
+
+const MEDIAN: Record<DemoStatus | 'All', number> = {
+  All: 18,
+  Reported: 16,
+  'In response': 19,
+  Resolved: 21,
+}
+
+const SEVERITY_MEDIAN_DELTA: Record<Severity | 'All', number> = {
+  All: 0,
+  CRITICAL: 5,
+  HIGH: 2,
+  MEDIUM: -1,
+  LOW: -4,
+}
+
+const LABELS_7 = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+
+export type ReportRange = '7d' | '30d'
+
+export interface ReportSnapshot {
+  reported: number
+  open: number
+  resolved: number
+  median: number
+  labels: string[]
+  daily: number[]
+  severity: { severity: Severity; count: number }[]
+  zones: { zone: string; count: number }[]
+}
+
+function sumCells(cells: Record<DemoStatus, Record<Severity, number>>) {
+  let total = 0
+  for (const status of Object.keys(cells) as DemoStatus[]) {
+    for (const sev of SEVERITY_ORDER) total += cells[status][sev]
+  }
+  return total
+}
+
+/**
+ * Deterministic report snapshot for a (status, severity, range) filter combo.
+ * Charts and KPIs re-derive coherently from the matrix on every call.
+ */
+export function reportSnapshot(
+  status: DemoStatus | 'All',
+  severityValue: Severity | 'All',
+  range: ReportRange,
+): ReportSnapshot {
+  const statusIds: DemoStatus[] =
+    status === 'All' ? ['Reported', 'In response', 'Resolved'] : [status]
+  const severityIds: Severity[] =
+    severityValue === 'All' ? SEVERITY_ORDER : [severityValue]
+
+  let reported = 0
+  let open = 0
+  let resolved = 0
+  const openBySeverity: Record<Severity, number> = {
+    CRITICAL: 0,
+    HIGH: 0,
+    MEDIUM: 0,
+    LOW: 0,
+  }
+
+  for (const st of statusIds) {
+    for (const sev of severityIds) {
+      const cell = CELLS[st][sev]
+      reported += cell
+      if (st === 'Resolved') resolved += cell
+      if (st === 'Reported' || st === 'In response') {
+        open += cell
+        openBySeverity[sev] += cell
+      }
+    }
+  }
+
+  // Zone counts: scale each severity's zone bases by how many incidents of
+  // that severity are open under the current filters (deterministic).
+  const zoneMap = new Map<string, number>()
+  for (const sev of severityIds) {
+    const factor = openBySeverity[sev]
+    for (const z of SEV_ZONES[sev]) {
+      zoneMap.set(z.zone, (zoneMap.get(z.zone) ?? 0) + z.count * factor)
+    }
+  }
+  const zones = [...zoneMap.entries()]
+    .map(([zone, count]) => ({ zone, count }))
+    .filter((z) => z.count > 0)
+
+  // Daily line: distribute `reported` across the range shape, remainder on the
+  // most recent day so the series always sums exactly to the reported KPI.
+  const series = range === '7d' ? DAILY_7 : DAILY_30
+  const baseTotal = sumCells(CELLS)
+  let remaining = reported
+  const daily = series.map((v) => {
+    const scaled = Math.min(remaining, Math.round((v / baseTotal) * reported))
+    remaining -= scaled
+    return scaled
+  })
+  if (daily.length > 0) daily[daily.length - 1] += remaining
+
+  const median =
+    MEDIAN[statusIds.length === 1 ? statusIds[0] : 'All'] +
+    SEVERITY_MEDIAN_DELTA[severityIds.length === 1 ? severityIds[0] : 'All']
+
+  return {
+    reported,
+    open,
+    resolved,
+    median,
+    labels: range === '7d' ? [...LABELS_7] : Array.from({ length: 30 }, (_, i) => `d${i + 1}`),
+    daily,
+    severity: SEVERITY_ORDER.map((sev) => ({ severity: sev, count: openBySeverity[sev] })),
+    zones,
+  }
+}

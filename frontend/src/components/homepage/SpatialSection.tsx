@@ -16,7 +16,7 @@ const ANNOTATIONS = [
 ] as const
 
 export function SpatialSection() {
-  const ref = useReveal<HTMLElement>()
+  const ref = useReveal<HTMLElement>('pop')
 
   return (
     <section

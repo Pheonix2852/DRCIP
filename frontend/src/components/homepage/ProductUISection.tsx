@@ -5,7 +5,7 @@ import { DemoFieldOperations } from './DemoFieldOperations'
 import { DemoReports } from './DemoReports'
 
 export function ProductUISection() {
-  const ref = useReveal<HTMLElement>()
+  const ref = useReveal<HTMLElement>('float')
 
   return (
     <section

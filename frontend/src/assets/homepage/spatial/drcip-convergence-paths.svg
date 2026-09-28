@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 800" fill="none">
+  <title>DRCIP Convergence Paths</title>
+  <g stroke="#1649B8" stroke-linecap="round">
+    <path d="M80 80L640 400" stroke-width="4"/>
+    <path d="M1200 80L640 400" stroke-width="4"/>
+    <path d="M80 720L640 400" stroke-width="4"/>
+    <path d="M1200 720L640 400" stroke-width="4"/>
+  </g>
+  <g stroke="#2F68F0" stroke-linecap="round" stroke-opacity=".75">
+    <path d="M240 160L640 400" stroke-width="2"/>
+    <path d="M1040 160L640 400" stroke-width="2"/>
+    <path d="M240 640L640 400" stroke-width="2"/>
+    <path d="M1040 640L640 400" stroke-width="2"/>
+  </g>
+  <circle cx="640" cy="400" r="24" fill="#1649B8"/>
+  <circle cx="640" cy="400" r="10" fill="#2F68F0"/>
+</svg>

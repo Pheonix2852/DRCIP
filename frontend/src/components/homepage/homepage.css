@@ -38,6 +38,13 @@
   --home-accent: #1649B8;
   --home-accent-2: #2F68F0;
 
+  /* Glass system — reusable translucent surface primitives */
+  --home-glass-bg: rgba(255, 255, 255, 0.55);
+  --home-glass-bg-strong: rgba(255, 255, 255, 0.78);
+  --home-glass-border: rgba(215, 222, 232, 0.9);
+  --home-glass-shadow: rgba(28, 52, 92, 0.1);
+  --home-blur: 20px;
+
   background: var(--home-canvas);
   color: var(--ink);
   -webkit-font-smoothing: antialiased;
@@ -114,49 +121,84 @@
 }
 
 /* ----------------------------------------------------------
-   3. Sticky glass navigation
+   3. Glass system — reusable homepage glass primitives
+   ---------------------------------------------------------- */
+
+@supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+  .home-glass {
+    background: var(--home-glass-bg);
+    -webkit-backdrop-filter: blur(var(--home-blur)) saturate(120%);
+    backdrop-filter: blur(var(--home-blur)) saturate(120%);
+  }
+
+  .home-glass-strong {
+    background: var(--home-glass-bg-strong);
+    -webkit-backdrop-filter: blur(var(--home-blur)) saturate(120%);
+    backdrop-filter: blur(var(--home-blur)) saturate(120%);
+  }
+}
+
+@supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+  .home-glass {
+    background: var(--home-glass-bg-strong);
+  }
+
+  .home-glass-strong {
+    background: var(--home-glass-bg-strong);
+  }
+}
+
+.home-glass-chip {
+  border: 1px solid var(--home-glass-border);
+  box-shadow: 0 4px 16px rgba(11, 18, 32, 0.05);
+}
+
+/* ----------------------------------------------------------
+   4. Sticky glass navigation
    ---------------------------------------------------------- */
 
 .nav-glass {
-  background: rgba(255, 255, 255, 0.72);
+  background: var(--home-glass-bg-strong);
   border-bottom: 1px solid rgba(255, 255, 255, 0.85);
-  -webkit-backdrop-filter: blur(20px) saturate(120%);
-  backdrop-filter: blur(20px) saturate(120%);
+  -webkit-backdrop-filter: blur(var(--home-blur)) saturate(120%);
+  backdrop-filter: blur(var(--home-blur)) saturate(120%);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
 }
 
 /* ----------------------------------------------------------
-   4. Capsule CTA treatments
+   5. Capsule CTA treatments
    ---------------------------------------------------------- */
 
 .capsule-primary {
   border-radius: 9999px;
-  background: var(--home-accent);
-  box-shadow: 0 10px 24px rgba(22, 73, 184, 0.22);
+  background: linear-gradient(180deg, #1e57c6 0%, var(--home-accent) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 10px 24px rgba(22, 73, 184, 0.22);
   transition: transform 0.35s cubic-bezier(0.2, 0.7, 0.3, 1), background-color 0.2s ease;
 }
 
 .capsule-primary:hover {
   transform: translateY(-2px);
-  background: #1d52c8;
+  background: linear-gradient(180deg, #1d52c8 0%, #1649b8 100%);
 }
 
 .capsule-secondary {
   border-radius: 9999px;
-  background: rgba(255, 255, 255, 0.55);
-  border: 1px solid rgba(215, 222, 232, 0.9);
+  background: var(--home-glass-bg);
+  border: 1px solid var(--home-glass-border);
   color: var(--ink);
+  -webkit-backdrop-filter: blur(20px) saturate(120%);
+  backdrop-filter: blur(20px) saturate(120%);
   transition: transform 0.35s cubic-bezier(0.2, 0.7, 0.3, 1), border-color 0.2s ease, background 0.2s ease;
 }
 
 .capsule-secondary:hover {
   transform: translateY(-2px);
   border-color: rgba(22, 73, 184, 0.35);
-  background: rgba(255, 255, 255, 0.85);
+  background: var(--home-glass-bg-strong);
 }
 
 /* ============================================================
-   5. HERO STAGE — design-unit system (reference §1–6)
+   6. HERO STAGE — design-unit system (reference §1–6)
    The hero is a full-viewport art-directed composition. Every
    foreground size/offset is `calc(N*var(--u))` where --u is one
    reference pixel of the 1280×960 comp, scaled to the viewport.
@@ -228,6 +270,8 @@
   transform: scale(1.002);
   filter: saturate(0.96) brightness(1.01);
   pointer-events: none;
+  -webkit-mask-image: linear-gradient(to bottom, #000 78%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 78%, transparent 100%);
 }
 
 /* Left-to-right veil: keeps the ink foreground readable over the photo. */
@@ -243,6 +287,8 @@
     rgba(239, 243, 248, 0.16) 64%,
     rgba(239, 243, 248, 0.04) 82%
   );
+  -webkit-mask-image: linear-gradient(to bottom, #000 75%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 75%, transparent 100%);
 }
 
 .hero-trace {
@@ -253,6 +299,20 @@
   width: calc(360 * var(--u));
   opacity: 0.5;
   pointer-events: none;
+}
+
+/* WebGL spatial field — ambient cobalt point cloud over the plate,
+   beneath the scrim and foreground. Paints nothing until the OGL
+   renderer's opacity ramp kicks in. */
+.hero-field {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  -webkit-mask-image: linear-gradient(to bottom, #000 72%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 72%, transparent 100%);
 }
 
 /* ── Foreground column (brand-safe top padding clears the 64px nav) ── */
@@ -943,4 +1003,298 @@
   border: 1px solid rgba(215, 222, 232, 0.9);
   border-radius: 8px;
   padding: 5px 8px;
+}
+
+/* ----------------------------------------------------------
+   8. Interactive states — marker↔queue sync + surfaces
+   ---------------------------------------------------------- */
+
+/* Active map marker: cobalt ring + lift (pointer hover, not the
+   resting state — SVG-drawn support zones and pins stay calm). */
+.demo-map-marker {
+  transition: opacity 0.15s ease;
+}
+
+.demo-map-marker .marker-dot {
+  transition: transform 0.15s ease, box-shadow 0.2s ease;
+}
+
+.demo-map-marker .marker-id {
+  opacity: 0.9;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.demo-map-marker.is-active .marker-dot {
+  transform: translate(-0.5px, -0.5px) scale(1.3);
+  box-shadow: 0 0 0 6px rgba(22, 73, 184, 0.18), 0 0 0 1px var(--home-accent);
+}
+
+.demo-map-marker.is-active .marker-id {
+  opacity: 1;
+  border-color: rgba(22, 73, 184, 0.45);
+}
+
+/* Queue row hover echoes the marker + lifts */
+.incident-queue li.is-hover,
+ul[data-testid='incident-queue'] li.is-hover {
+  border-color: rgba(22, 73, 184, 0.4);
+  background: rgba(47, 104, 240, 0.06);
+  transform: translateX(2px);
+}
+
+ul[data-testid='incident-queue'] li {
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+}
+
+/* ----------------------------------------------------------
+   9. Editorial accordion (Trust) + vaul drawer (mobile nav)
+   ---------------------------------------------------------- */
+
+.drcip-home [data-slot='accordion-trigger'] {
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+.drcip-home [data-slot='accordion-trigger'] svg {
+  color: var(--text-muted);
+}
+
+.drcip-home [data-slot='accordion-trigger']:focus-visible {
+  outline: 2px solid var(--home-accent-2);
+  outline-offset: 4px;
+}
+
+.drcip-home [data-slot='accordion-content'] {
+  overflow: hidden;
+}
+
+.drcip-home [data-slot='accordion-content'] > div {
+  border-top: 1px solid var(--border);
+}
+
+.drcip-home [data-slot='drawer-content'] {
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.drcip-home [data-slot='drawer-overlay'] {
+  background: rgba(10, 18, 32, 0.32);
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+}
+
+/* ----------------------------------------------------------
+   10. Glass material system — extended primitives
+   Objects placed in the environment, not every element is a card.
+   ---------------------------------------------------------- */
+
+.glass-surface {
+  background: var(--home-glass-bg);
+  border: 1px solid var(--home-glass-border);
+  box-shadow: 0 1px 2px rgba(11, 18, 32, 0.04), 0 8px 24px rgba(28, 52, 92, 0.06);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+@supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+  .glass-surface {
+    -webkit-backdrop-filter: blur(var(--home-blur)) saturate(120%);
+    backdrop-filter: blur(var(--home-blur)) saturate(120%);
+  }
+}
+
+.glass-surface-hover:hover {
+  border-color: rgba(22, 73, 184, 0.3);
+  box-shadow: 0 1px 2px rgba(11, 18, 32, 0.04), 0 12px 32px rgba(28, 52, 92, 0.08);
+}
+
+.glass-accordion {
+  background: transparent;
+  transition: background 0.18s ease;
+}
+
+.glass-accordion:hover {
+  background: rgba(243, 246, 250, 0.5);
+}
+
+/* Accordion chevron: restrained cobalt on open */
+.drcip-home [data-slot='accordion-trigger'][data-state='open'] > svg {
+  color: var(--home-accent) !important;
+}
+
+/* ----------------------------------------------------------
+   11. CTA arrow micro-interaction
+   ---------------------------------------------------------- */
+
+.cta-arrow {
+  display: inline-block;
+  transition: transform 0.2s cubic-bezier(0.2, 0.7, 0.3, 1);
+  will-change: transform;
+}
+
+.capsule-primary:hover .cta-arrow,
+.capsule-secondary:hover .cta-arrow {
+  transform: translateX(3px);
+}
+
+.capsule-primary {
+  will-change: transform, box-shadow;
+}
+
+.capsule-primary:active {
+  transform: translateY(0);
+  transition-duration: 0.08s;
+}
+
+.capsule-secondary {
+  will-change: transform, border-color;
+}
+
+/* ----------------------------------------------------------
+   12. Nav active section + micro-interactions
+   ---------------------------------------------------------- */
+
+.nav-link-active {
+  color: var(--home-accent) !important;
+  font-weight: 500;
+}
+
+.nav-sign-in:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(22, 73, 184, 0.15);
+}
+
+/* ----------------------------------------------------------
+   13. Workflow micro-interactions
+   ---------------------------------------------------------- */
+
+.wf-step {
+  transition: transform 0.18s ease, border-color 0.18s ease;
+}
+
+.wf-step:hover {
+  transform: translateX(2px);
+}
+
+.wf-step:hover .wf-step-num {
+  color: var(--home-accent);
+}
+
+.wf-step-num {
+  transition: color 0.18s ease;
+}
+
+/* ----------------------------------------------------------
+   14. Role entry micro-interactions
+   ---------------------------------------------------------- */
+
+.role-card {
+  transition: transform 0.2s cubic-bezier(0.2, 0.7, 0.3, 1), border-color 0.2s ease, box-shadow 0.2s ease;
+  border-radius: 8px;
+}
+
+.role-card:hover {
+  transform: translateY(-3px);
+  border-color: rgba(22, 73, 184, 0.3);
+  box-shadow: 0 8px 24px rgba(28, 52, 92, 0.08);
+}
+
+.role-card:hover .role-cta-arrow {
+  transform: translateX(3px);
+}
+
+.role-cta-arrow {
+  display: inline-block;
+  transition: transform 0.2s cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+
+/* ----------------------------------------------------------
+   15. Demo map pointer depth response
+   ---------------------------------------------------------- */
+
+.demo-map {
+  --demo-mx: 0;
+  --demo-my: 0;
+}
+
+.demo-map-marker {
+  transform: translate3d(calc(var(--demo-mx) * -3px), calc(var(--demo-my) * -2px), 0);
+  transition: transform 0.35s cubic-bezier(0.2, 0.7, 0.3, 1), opacity 0.15s ease, box-shadow 0.2s ease;
+}
+
+.demo-map-marker.is-active {
+  transform: translate3d(calc(var(--demo-mx) * -4px), calc(var(--demo-my) * -3px), 0) scale(1.08);
+}
+
+.demo-map-cross {
+  transform: translate3d(calc(var(--demo-mx) * 1.5px), calc(var(--demo-my) * 1.5px), 0);
+  transition: transform 0.35s cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+
+/* ----------------------------------------------------------
+   16. Field operations hover states
+   ---------------------------------------------------------- */
+
+.fo-assignment {
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.fo-assignment:hover {
+  border-color: var(--home-accent);
+  box-shadow: 0 0 0 1px rgba(22, 73, 184, 0.12);
+}
+
+.fo-team-row {
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+}
+
+.fo-team-row:hover {
+  border-color: rgba(22, 73, 184, 0.3);
+  background: rgba(47, 104, 240, 0.04);
+}
+
+/* ----------------------------------------------------------
+   17. Reports filtered-state text
+   ---------------------------------------------------------- */
+
+.reports-filter-caption {
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* ----------------------------------------------------------
+   18. Reduced motion: keep interactive states, kill parallax / transforms
+   ---------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .capsule-primary:hover,
+  .capsule-secondary:hover,
+  .capsule-primary:active {
+    transform: none;
+  }
+
+  .cta-arrow,
+  .role-cta-arrow {
+    transform: none !important;
+  }
+
+  .wf-step:hover,
+  .role-card:hover,
+  .nav-sign-in:hover,
+  .fo-team-row:hover {
+    transform: none;
+  }
+
+  .demo-map-marker,
+  .demo-map-marker.is-active,
+  .demo-map-cross {
+    transform: translate(-50%, -50%);
+  }
+
+  .demo-map-marker.is-active {
+    transform: translate(-50%, -50%) scale(1.08);
+  }
 }

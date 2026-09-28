@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { DrcipLoader } from '../components/DrcipLoader'
+import { SmoothScroll } from '../components/homepage/SmoothScroll'
 import { PublicNav } from '../components/homepage/PublicNav'
 import { HeroSection } from '../components/homepage/HeroSection'
 import { ProblemSection } from '../components/homepage/ProblemSection'
@@ -27,6 +28,7 @@ export function HomePage() {
         Skip to content
       </a>
       <DrcipLoader onDone={() => setLoaded(true)} />
+      <SmoothScroll />
       <PublicNav start={loaded} />
       <main id="main-content">
         <HeroSection start={loaded} />

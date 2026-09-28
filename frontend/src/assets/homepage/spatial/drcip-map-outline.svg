@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 800" fill="none">
+  <title>DRCIP Abstract Map Outline</title>
+  <path d="M178 156L308 104L448 132L566 92L708 142L846 112L1016 178L1092 292L1030 396L1080 516L964 626L822 604L716 686L566 642L442 694L310 622L192 654L124 534L158 426L108 318L178 156Z"
+        stroke="#0B1220" stroke-opacity=".28" stroke-width="3" stroke-linejoin="round"/>
+  <g stroke="#1649B8" stroke-opacity=".72" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M168 318L360 318L508 416L640 402L798 296L1040 296"/>
+    <path d="M286 600L410 516L640 402L748 510L930 510L1042 398"/>
+    <path d="M448 132L508 416L442 694"/>
+  </g>
+  <g fill="#2F68F0">
+    <circle cx="360" cy="318" r="7"/>
+    <circle cx="508" cy="416" r="7"/>
+    <circle cx="640" cy="402" r="10"/>
+    <circle cx="798" cy="296" r="7"/>
+    <circle cx="748" cy="510" r="7"/>
+    <circle cx="930" cy="510" r="7"/>
+  </g>
+</svg>

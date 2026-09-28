@@ -16,7 +16,7 @@ export function ProblemSection() {
       id="product"
       ref={ref}
       aria-labelledby="problem-heading"
-      className="relative scroll-mt-20 border-t border-border bg-canvas py-20 md:py-28"
+      className="relative scroll-mt-20 bg-canvas py-20 md:py-28"
     >
       <div className="container-drcip">
         <div className="grid items-start gap-12 lg:grid-cols-12 lg:gap-16">

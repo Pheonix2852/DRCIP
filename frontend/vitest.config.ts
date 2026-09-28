@@ -12,6 +12,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
+      '@': path.resolve(__dirname, 'src'),
       '@drcip/contracts': path.resolve(__dirname, '../shared/contracts/src/index.ts'),
     },
   },

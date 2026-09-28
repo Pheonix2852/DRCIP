@@ -6,6 +6,7 @@
     "moduleResolution": "bundler",
     "baseUrl": ".",
     "paths": {
+      "@/*": ["./src/*"],
       "@drcip/contracts": ["../shared/contracts/dist"]
     },
     "esModuleInterop": true,
