@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import api from '../lib/api'
-import { useAuth } from '../contexts/AuthContext'
 import { Card, CardHeader, CardTitle, CardContent } from './ui/card'
 import { Input } from './ui/input'
 import { Button } from './ui/button'
@@ -17,7 +16,6 @@ interface UserProfile {
 }
 
 export function ProfilePage() {
-  const { user } = useAuth()
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
