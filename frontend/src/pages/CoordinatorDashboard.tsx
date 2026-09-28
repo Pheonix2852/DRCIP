@@ -93,7 +93,7 @@ export function CoordinatorDashboard() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-xl font-semibold">Coordinator Command Center</h1>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Card className="px-3 py-1">
             <span className="text-xs text-muted-foreground">Resources:</span> {capacityData?.available_resources ?? '-'}
           </Card>
@@ -185,8 +185,8 @@ export function CoordinatorDashboard() {
               {items.map((inc) => (
                 <li key={inc.id} className="py-3">
                   <Link to={`/incidents/${inc.id}`} className="block hover:bg-muted/50 rounded-md p-2 -m-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-medium text-sm">{inc.id}</span>
+                    <div className="flex items-start justify-between gap-2 flex-wrap">
+                      <span className="font-medium text-sm min-w-0 flex-1 break-all">{inc.id}</span>
                       <span className="flex gap-1 flex-wrap justify-end">
                         <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 text-xs">{inc.status}</span>
                         {inc.confirmed_severity && (
@@ -199,8 +199,8 @@ export function CoordinatorDashboard() {
                         )}
                       </span>
                     </div>
-                    <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{inc.description}</p>
-                    <p className="text-xs text-muted-foreground mt-1">
+                    <p className="text-sm text-muted-foreground mt-1 line-clamp-2 break-words">{inc.description}</p>
+                    <p className="text-xs text-muted-foreground mt-1 break-words">
                       {inc.disaster_type} • {new Date(inc.created_at).toLocaleString()}
                       {inc.latitude != null && inc.longitude != null && ` • ${inc.latitude.toFixed(4)}, ${inc.longitude.toFixed(4)}`}
                     </p>

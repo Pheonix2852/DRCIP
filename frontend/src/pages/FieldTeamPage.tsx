@@ -61,31 +61,31 @@ export function TeamStatusPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
+          <CardTitle className="text-base flex items-center gap-2 flex-wrap">
             {team.name}
             <span className={`px-2 py-0.5 rounded-full text-xs ${statusColor(team.status)}`}>{team.status}</span>
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-4 text-sm">
+          <div className="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
             <div>
               <p className="text-muted-foreground">Leader</p>
-              <p className="font-medium">{team.leader.name}</p>
+              <p className="font-medium break-words">{team.leader.name}</p>
             </div>
             <div>
               <p className="text-muted-foreground">Team ID</p>
-              <p className="font-mono text-xs">{team.id}</p>
+              <p className="font-mono text-xs break-all">{team.id}</p>
             </div>
           </div>
 
           <div>
             <p className="text-sm text-muted-foreground mb-1">Update Status</p>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Select
                 value={team.status}
                 onChange={(e) => statusMutation.mutate(e.target.value)}
                 disabled={statusMutation.isPending}
-                className="w-48"
+                className="w-full sm:w-48"
                 data-testid="my-team-status"
               >
                 {TEAM_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}

@@ -188,18 +188,14 @@ export function ResourcesPage() {
             </Select>
             <Input placeholder="Capability..." value={capability} onChange={(e) => { setCapability(e.target.value); setPage(1) }} data-testid="capability-input" />
           </div>
-          <div className="flex flex-wrap items-end gap-2">
-            <div className="flex items-end gap-1">
-              <Input placeholder="Lat" type="number" step="any" className="w-24" value={nearbyLat} onChange={(e) => setNearbyLat(e.target.value)} data-testid="nearby-lat" />
-              <Input placeholder="Lng" type="number" step="any" className="w-24" value={nearbyLng} onChange={(e) => setNearbyLng(e.target.value)} data-testid="nearby-lng" />
-              <Input placeholder="Radius km" type="number" step="any" className="w-24" value={nearbyRadius} onChange={(e) => setNearbyRadius(e.target.value)} data-testid="nearby-radius" />
-              <Button size="sm" variant={nearbyActive ? 'default' : 'outline'} onClick={() => { setNearbyActive(!nearbyActive); setPage(1) }} data-testid="nearby-toggle">
-                {nearbyActive ? 'Nearby On' : 'Nearby Off'}
-              </Button>
-            </div>
-            <div className="ml-auto">
-              <Button variant="ghost" size="sm" onClick={handleFiltersReset}>Clear filters</Button>
-            </div>
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
+            <Input placeholder="Lat" type="number" step="any" className="sm:w-24" value={nearbyLat} onChange={(e) => setNearbyLat(e.target.value)} data-testid="nearby-lat" />
+            <Input placeholder="Lng" type="number" step="any" className="sm:w-24" value={nearbyLng} onChange={(e) => setNearbyLng(e.target.value)} data-testid="nearby-lng" />
+            <Input placeholder="Radius km" type="number" step="any" className="col-span-2 sm:col-span-1 sm:w-24" value={nearbyRadius} onChange={(e) => setNearbyRadius(e.target.value)} data-testid="nearby-radius" />
+            <Button size="sm" variant={nearbyActive ? 'default' : 'outline'} className="col-span-2 sm:col-span-1 sm:w-auto" onClick={() => { setNearbyActive(!nearbyActive); setPage(1) }} data-testid="nearby-toggle">
+              {nearbyActive ? 'Nearby On' : 'Nearby Off'}
+            </Button>
+            <Button variant="ghost" size="sm" className="col-span-2 sm:col-span-1 lg:ml-auto" onClick={handleFiltersReset}>Clear filters</Button>
           </div>
         </CardContent>
       </Card>
@@ -240,23 +236,25 @@ export function ResourcesPage() {
               <ul className="divide-y" role="list">
                 {items.map((r) => (
                   <li key={r.id} className="py-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
+                    <div className="drcip-dense-row">
+                      <div className="drcip-dense-row-content">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-medium text-sm">{r.id}</span>
+                          <span className="font-medium text-sm break-all">{r.id}</span>
                           <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 text-xs">{r.status}</span>
                           <span className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 text-xs">{r.resource_type}</span>
                           {r.is_own_team && <span className="px-2 py-0.5 rounded-full bg-green-100 text-green-800 text-xs">Your Team</span>}
                         </div>
-                        <p className="text-sm text-muted-foreground mt-1">{r.name}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">
+                        <p className="text-sm text-muted-foreground mt-1 break-words">{r.name}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5 break-words">
                           Qty: {r.quantity}{r.unit ? ` ${r.unit}` : ''}
                           {r.capacity != null && ` | Capacity: ${r.capacity}`}
                           {r.latitude != null && r.longitude != null && ` | ${r.latitude.toFixed(4)}, ${r.longitude.toFixed(4)}`}
                         </p>
                       </div>
                       {canManage && (
-                        <Button variant="outline" size="sm" onClick={() => openEdit(r)} data-testid={`edit-${r.id}`}>Edit</Button>
+                        <div className="drcip-dense-row-actions">
+                          <Button variant="outline" size="sm" onClick={() => openEdit(r)} data-testid={`edit-${r.id}`}>Edit</Button>
+                        </div>
                       )}
                     </div>
                   </li>

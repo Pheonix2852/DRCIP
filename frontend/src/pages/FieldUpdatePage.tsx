@@ -56,20 +56,26 @@ export function FieldUpdatePage() {
           ) : (
             <ul className="divide-y" role="list">
               {items.map((a) => (
-                <li key={a.id} className="py-3 flex items-center justify-between gap-2">
-                  <div>
-                    <span className="font-medium text-sm">{a.id}</span>
-                    <span className="ml-2 text-xs text-muted-foreground">{a.status}</span>
-                    <span className="ml-2 text-xs text-muted-foreground">{a.incident_id}</span>
+                <li key={a.id} className="py-3">
+                  <div className="drcip-dense-row">
+                    <div className="drcip-dense-row-content">
+                      <p className="font-medium text-sm break-all">{a.id}</p>
+                      <p className="mt-0.5 text-xs text-muted-foreground break-words">
+                        {a.status} · Incident {a.incident_id}
+                      </p>
+                    </div>
+                    <div className="drcip-dense-row-actions">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="w-full sm:w-auto"
+                        disabled={assignmentId === a.id && fieldUpdateMutation.isPending}
+                        onClick={() => setAssignmentId(a.id)}
+                      >
+                        Select
+                      </Button>
+                    </div>
                   </div>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={assignmentId === a.id && fieldUpdateMutation.isPending}
-                    onClick={() => setAssignmentId(a.id)}
-                  >
-                    Select
-                  </Button>
                 </li>
               ))}
             </ul>
@@ -80,7 +86,7 @@ export function FieldUpdatePage() {
       {assignmentId && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Submit Update for {assignmentId}</CardTitle>
+            <CardTitle className="text-base break-all">Submit Update for {assignmentId}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <div>

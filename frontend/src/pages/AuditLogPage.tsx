@@ -74,15 +74,15 @@ export function AuditLogPage() {
           <CardTitle className="text-base">Filters</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-wrap gap-2">
-            <Input placeholder="Search action / entity" className="w-56" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1) }} data-testid="audit-search" />
-            <Select value={actionFilter} onChange={(e) => { setActionFilter(e.target.value); setPage(1) }} className="w-56" data-testid="audit-action-filter">
+          <div className="drcip-filter-group">
+            <Input placeholder="Search action / entity" className="sm:w-56" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1) }} data-testid="audit-search" />
+            <Select value={actionFilter} onChange={(e) => { setActionFilter(e.target.value); setPage(1) }} className="sm:w-56" data-testid="audit-action-filter">
               <option value="">All actions</option>
               {AUDIT_ACTION_VALUES.map((a) => <option key={a} value={a}>{a}</option>)}
             </Select>
-            <Input placeholder="Entity type" className="w-40" value={entityType} onChange={(e) => { setEntityType(e.target.value); setPage(1) }} data-testid="audit-entity-filter" />
-            <Input type="datetime-local" className="w-52" value={from} onChange={(e) => { setFrom(e.target.value); setPage(1) }} data-testid="audit-from" />
-            <Input type="datetime-local" className="w-52" value={to} onChange={(e) => { setTo(e.target.value); setPage(1) }} data-testid="audit-to" />
+            <Input placeholder="Entity type" className="sm:w-40" value={entityType} onChange={(e) => { setEntityType(e.target.value); setPage(1) }} data-testid="audit-entity-filter" />
+            <Input type="datetime-local" className="sm:w-52" value={from} onChange={(e) => { setFrom(e.target.value); setPage(1) }} data-testid="audit-from" />
+            <Input type="datetime-local" className="sm:w-52" value={to} onChange={(e) => { setTo(e.target.value); setPage(1) }} data-testid="audit-to" />
             <Button variant="ghost" size="sm" onClick={() => { setSearch(''); setActionFilter(''); setEntityType(''); setFrom(''); setTo(''); setPage(1) }}>Clear filters</Button>
           </div>
         </CardContent>
@@ -98,17 +98,19 @@ export function AuditLogPage() {
         <Card>
           <CardContent className="space-y-2">
             {data.items.map((l) => (
-              <div key={l.id} className="flex flex-wrap items-center gap-3 border-b pb-2 last:border-b-0">
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
+              <div key={l.id} className="drcip-dense-row border-b pb-2 last:border-b-0">
+                <div className="drcip-dense-row-content">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">{l.action}</span>
                     <span className="text-xs text-muted-foreground">{l.entity_type}{l.entity_id ? ` · ${String(l.entity_id).slice(0, 12)}` : ''}</span>
                   </div>
-                  <div className="text-xs text-muted-foreground mt-1">
+                  <div className="text-xs text-muted-foreground mt-1 break-words">
                     {l.actor_name ?? 'System'} · {new Date(l.occurred_at).toLocaleString()}
                   </div>
                 </div>
-                <Button variant="outline" size="sm" onClick={() => openDetail(l.id)} data-testid="audit-detail">View</Button>
+                <div className="drcip-dense-row-actions">
+                  <Button variant="outline" size="sm" onClick={() => openDetail(l.id)} data-testid="audit-detail">View</Button>
+                </div>
               </div>
             ))}
           </CardContent>

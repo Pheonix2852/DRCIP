@@ -2,21 +2,21 @@ import { describe, it, expect } from 'vitest'
 import { severityColor } from '../components/MapPanel'
 
 describe('MapPanel marker mapping', () => {
-  it('maps CRITICAL severity to red', () => {
-    expect(severityColor('CRITICAL')).toBe('#dc2626')
+  it('maps CRITICAL severity to its DESIGN_SYSTEM colour', () => {
+    expect(severityColor('CRITICAL')).toBe('#B42318')
   })
-  it('maps HIGH severity to orange', () => {
-    expect(severityColor('HIGH')).toBe('#ea580c')
+  it('maps HIGH severity to its DESIGN_SYSTEM colour', () => {
+    expect(severityColor('HIGH')).toBe('#C2410C')
   })
-  it('maps MEDIUM severity to yellow', () => {
-    expect(severityColor('MEDIUM')).toBe('#ca8a04')
+  it('maps MEDIUM severity to its DESIGN_SYSTEM colour', () => {
+    expect(severityColor('MEDIUM')).toBe('#A16207')
   })
-  it('maps LOW severity to blue', () => {
-    expect(severityColor('LOW')).toBe('#2563eb')
+  it('maps LOW severity to its DESIGN_SYSTEM colour', () => {
+    expect(severityColor('LOW')).toBe('#475467')
   })
-  it('maps unknown severity to gray', () => {
-    expect(severityColor(undefined)).toBe('#6b7280')
-    expect(severityColor('UNKNOWN')).toBe('#6b7280')
+  it('maps unknown severity to the unavailable tone', () => {
+    expect(severityColor(undefined)).toBe('#667085')
+    expect(severityColor('UNKNOWN')).toBe('#667085')
   })
 })
 

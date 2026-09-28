@@ -123,13 +123,13 @@ export function UsersPage() {
           <CardTitle className="text-base">Filters</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-wrap gap-2">
-            <Input placeholder="Search name or email" className="w-56" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1) }} data-testid="user-search" />
-            <Select value={roleFilter} onChange={(e) => { setRoleFilter(e.target.value); setPage(1) }} className="w-48" data-testid="user-role-filter">
+          <div className="drcip-filter-group">
+            <Input placeholder="Search name or email" className="sm:w-56" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1) }} data-testid="user-search" />
+            <Select value={roleFilter} onChange={(e) => { setRoleFilter(e.target.value); setPage(1) }} className="sm:w-48" data-testid="user-role-filter">
               <option value="">All roles</option>
               {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
             </Select>
-            <Select value={activeFilter} onChange={(e) => { setActiveFilter(e.target.value); setPage(1) }} className="w-40" data-testid="user-active-filter">
+            <Select value={activeFilter} onChange={(e) => { setActiveFilter(e.target.value); setPage(1) }} className="sm:w-40" data-testid="user-active-filter">
               <option value="">All statuses</option>
               <option value="true">Active</option>
               <option value="false">Inactive</option>
@@ -155,8 +155,8 @@ export function UsersPage() {
         <Card>
           <CardContent className="space-y-3">
             {data.items.map((u) => (
-              <div key={u.id} className="flex flex-wrap items-center gap-3 border-b pb-3 last:border-b-0 last:pb-0">
-                <div className="min-w-0 flex-1">
+              <div key={u.id} className="drcip-dense-row border-b pb-3 last:border-b-0 last:pb-0">
+                <div className="drcip-dense-row-content">
                   <div className="flex items-center gap-2">
                     <span className="font-medium truncate">{u.name}</span>
                     <span className={`text-xs px-2 py-0.5 rounded-full ${u.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`} data-testid="user-status">
@@ -166,7 +166,7 @@ export function UsersPage() {
                   <div className="text-xs text-muted-foreground truncate">{u.email}</div>
                   <div className="text-xs text-muted-foreground">Role: {u.role}</div>
                 </div>
-                <div className="flex items-center gap-1">
+                <div className="drcip-dense-row-actions">
                   <Button variant="outline" size="sm" onClick={() => openEdit(u)} data-testid="edit-user">Edit</Button>
                   {u.is_active
                     ? <Button variant="outline" size="sm" onClick={() => deactivateMutation.mutate(u.id)} data-testid="deactivate-user">Deactivate</Button>

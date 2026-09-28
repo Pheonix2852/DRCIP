@@ -1,6 +1,9 @@
 import { useEffect } from 'react'
 import { MapContainer, TileLayer, Marker, useMap } from 'react-leaflet'
 import L from 'leaflet'
+import { severityColor } from '../lib/severityColor'
+
+export { severityColor }
 
 const TILE_URL = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
 const TILE_ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
@@ -22,16 +25,6 @@ interface MapPanelProps {
   draggable?: boolean
   onDragEnd?: (lat: number, lng: number) => void
   height?: string
-}
-
-export function severityColor(severity?: string): string {
-  switch (severity) {
-    case 'CRITICAL': return '#dc2626'
-    case 'HIGH': return '#ea580c'
-    case 'MEDIUM': return '#ca8a04'
-    case 'LOW': return '#2563eb'
-    default: return '#6b7280'
-  }
 }
 
 function statusIcon(status?: string): string {

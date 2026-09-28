@@ -97,7 +97,9 @@ const config: Config = {
           high: 'rgb(var(--severity-high-rgb) / <alpha-value>)',
           medium: 'rgb(var(--severity-medium-rgb) / <alpha-value>)',
           low: 'rgb(var(--severity-low-rgb) / <alpha-value>)',
-          background: 'rgb(var(--brand-canvas-rgb) / <alpha-value>)',
+/* shadcn/ui standard token mapping. `background` resolves to the
+           cool operational surface; the public homepage uses `bg-canvas`. */
+        background: 'rgb(var(--surface-cool-rgb) / <alpha-value>)',
           surface: 'rgb(var(--surface-rgb) / <alpha-value>)',
         },
       },

@@ -12,7 +12,7 @@
 /* Sora — Display / Hero */
 @font-face {
   font-family: 'Sora';
-  src: url('./assets/fonts/Sora[wght].ttf') format('truetype');
+  src: url('./assets/fonts/Sora[wght].ttf') format('truetype-variations');
   font-weight: 100 800;
   font-style: normal;
   font-display: swap;
@@ -21,20 +21,24 @@
 /* Manrope — Headings / Page titles */
 @font-face {
   font-family: 'Manrope';
-  src: url('./assets/fonts/Manrope[wght].ttf') format('truetype');
+  src: url('./assets/fonts/Manrope[wght].ttf') format('truetype-variations');
   font-weight: 200 800;
   font-style: normal;
   font-display: swap;
 }
 
-/* Inter — Body / Interface / Forms / Navigation
-   NOTE: Only the italic variable font file exists in the repo.
-   When the regular upright file (Inter-VariableFont_opsz,wght.ttf)
-   is added to assets/fonts/, this declaration will use it.
-   Until then, system-ui provides the normal-weight body text. */
+/* Inter — Body / Interface / Forms / Navigation.
+   Two faces: upright (normal) and italic, both variable. */
 @font-face {
   font-family: 'Inter';
-  src: url('./assets/fonts/Inter-VariableFont_opsz,wght.ttf') format('truetype');
+  src: url('./assets/fonts/Inter-VariableFont_opsz,wght.ttf') format('truetype-variations');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Inter';
+  src: url('./assets/fonts/Inter-Italic-VariableFont_opsz,wght.ttf') format('truetype-variations');
   font-weight: 100 900;
   font-style: italic;
   font-display: swap;
@@ -151,7 +155,7 @@ body {
   font-size: 16px;
   line-height: 1.5;
   color: var(--ink);
-  background-color: var(--brand-canvas);
+  background-color: var(--surface-cool);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -299,9 +303,104 @@ textarea {
 }
 
 /* ----------------------------------------------------------
+   8a. Shell motion — restrained, purposeful only
+   ---------------------------------------------------------- */
+
+@keyframes drcip-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes drcip-slide-in-left {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+
+.sheet-backdrop {
+  animation: drcip-fade-in 160ms ease-out;
+}
+
+.sheet-panel {
+  animation: drcip-slide-in-left 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.nav-link-active-indicator {
+  transition: background-color 140ms ease-out, box-shadow 140ms ease-out;
+}
+
+/* ----------------------------------------------------------
    9. Tailwind Layers
    ---------------------------------------------------------- */
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ----------------------------------------------------------
+   10. Responsive Operational Layout Primitives
+   Mobile-first: dense operational content stacks at <= 640px
+   and resumes desktop rows from sm (640px) up.
+   ---------------------------------------------------------- */
+
+@layer components {
+  /* Dense content + actions row.
+     Desktop: [content ........ ] [actions]
+     Mobile : [content]
+              [actions]
+     Apply to the row element; tag primary content with
+     .drcip-dense-row-content and the action group with
+     .drcip-dense-row-actions. */
+  .drcip-dense-row {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+  }
+
+  .drcip-dense-row-content {
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+
+  .drcip-dense-row-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  @media (min-width: 640px) {
+    .drcip-dense-row {
+      flex-direction: row;
+      align-items: flex-start;
+      justify-content: space-between;
+    }
+    .drcip-dense-row-actions {
+      flex: 0 0 auto;
+      justify-content: flex-end;
+    }
+  }
+
+  /* Filter / toolbar group: stacked full-width controls on
+     phones, a wrapping row from sm up. Pages attach fixed
+     widths (e.g. sm:w-56) rather than base widths so nothing
+     is clipped at 320px. */
+  .drcip-filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  .drcip-filter-group > * {
+    width: 100%;
+  }
+  @media (min-width: 640px) {
+    .drcip-filter-group {
+      flex-direction: row;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .drcip-filter-group > * {
+      width: auto;
+    }
+  }
+}

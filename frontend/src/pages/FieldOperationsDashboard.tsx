@@ -67,8 +67,8 @@ export function FieldOperationsDashboard() {
                 <div className="text-center py-8 text-muted-foreground">No team is assigned to you.</div>
               ) : (
                 <Link to="/field/team" className="block hover:bg-muted/50 rounded-md p-2 -m-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-medium">{team.name}</span>
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <span className="font-medium min-w-0 break-words">{team.name}</span>
                     <span className={`px-2 py-0.5 rounded-full text-xs ${statusColor(team.status)}`}>{team.status}</span>
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">Leader: {team.leader.name} · {team.members.length} members</p>
@@ -136,19 +136,25 @@ export function FieldOperationsDashboard() {
               ) : (
                 <ul className="divide-y" role="list">
                   {items.slice(0, 5).map((a) => (
-                    <li key={a.id} className="py-2 text-sm flex items-center justify-between gap-2">
-                      <Link to="/field/update" className="hover:underline">
-                        <span className="font-medium">{a.id}</span>
-                      </Link>
-                      <span className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 text-xs">{a.status}</span>
-                    </li>
+                    <li key={a.id} className="py-2 text-sm">
+                    <div className="drcip-dense-row">
+                      <div className="drcip-dense-row-content">
+                        <Link to="/field/update" className="hover:underline break-all">
+                          <span className="font-medium">{a.id}</span>
+                        </Link>
+                      </div>
+                      <div className="drcip-dense-row-actions">
+                        <span className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 text-xs">{a.status}</span>
+                      </div>
+                    </div>
+                  </li>
                   ))}
                 </ul>
               )}
             </CardContent>
           </Card>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">Notifications</CardTitle>

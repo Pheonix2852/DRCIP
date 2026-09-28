@@ -195,25 +195,25 @@ export function TeamsPage() {
             <ul className="divide-y" role="list">
               {items.map((t) => (
                 <li key={t.id} className="py-3">
-                  <div className="flex items-start justify-between gap-3 flex-wrap">
-                    <div className="min-w-0">
+                  <div className="drcip-dense-row">
+                    <div className="drcip-dense-row-content">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-medium text-sm">{t.id}</span>
+                        <span className="font-medium text-sm break-all">{t.id}</span>
                         <span className={`px-2 py-0.5 rounded-full text-xs ${statusColor(t.status)}`}>{t.status}</span>
                       </div>
-                      <p className="text-sm mt-1">{t.name}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
+                      <p className="text-sm mt-1 break-words">{t.name}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5 break-words">
                         Leader: {t.leader.name} ({t.leader.id}) | Members: {t.members.length}
                       </p>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="drcip-dense-row-actions">
                       {canManage && (
                         <>
                           <Select
                             value={t.status}
                             onChange={(e) => statusMutation.mutate({ id: t.id, status: e.target.value })}
                             aria-label={`Update ${t.id} status`}
-                            className="w-36"
+                            className="w-full sm:w-36"
                             data-testid={`status-${t.id}`}
                           >
                             {TEAM_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}

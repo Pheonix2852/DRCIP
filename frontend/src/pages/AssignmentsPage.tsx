@@ -67,27 +67,27 @@ export function AssignmentsPage() {
             <ul className="divide-y" role="list">
               {items.map((a) => (
                 <li key={a.id} className="py-3" data-testid={`assignment-${a.id}`}>
-                  <div className="flex flex-wrap items-start justify-between gap-2">
-                    <div className="min-w-0">
+                  <div className="drcip-dense-row">
+                    <div className="drcip-dense-row-content">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-medium text-sm">{a.id}</span>
+                        <span className="font-medium text-sm break-all">{a.id}</span>
                         <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 text-xs">{a.status}</span>
-                        <Link className="text-xs text-blue-700 underline" to={`/incidents/${a.incident_id}`}>
+                        <Link className="text-xs text-blue-700 underline break-all" to={`/incidents/${a.incident_id}`}>
                           {a.incident_id}
                         </Link>
                         {a.field_team_id && (
-                          <span className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 text-xs">{a.field_team_id}</span>
+                          <span className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 text-xs break-all">{a.field_team_id}</span>
                         )}
                       </div>
-                      <p className="text-xs text-muted-foreground mt-1">
+                      <p className="text-xs text-muted-foreground mt-1 break-words">
                         {a.items.length} item(s) &middot; assigned {new Date(a.assigned_at).toLocaleString()}
                         {a.started_at && <> &middot; started {new Date(a.started_at).toLocaleString()}</>}
                         {a.completed_at && <> &middot; completed {new Date(a.completed_at).toLocaleString()}</>}
                       </p>
-                      {a.notes && <p className="text-xs text-muted-foreground mt-0.5">{a.notes}</p>}
+                      {a.notes && <p className="text-xs text-muted-foreground mt-0.5 break-words">{a.notes}</p>}
                     </div>
                     {canManage && (a.status === 'ASSIGNED' || a.status === 'IN_PROGRESS') && (
-                      <div className="flex gap-2">
+                      <div className="drcip-dense-row-actions">
                         {a.status === 'ASSIGNED' && (
                           <Button
                             size="sm"
