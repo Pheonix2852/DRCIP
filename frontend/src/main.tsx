@@ -5,6 +5,7 @@ import { RouterProvider } from "react-router-dom";
 import { Toaster } from "sonner";
 import { router } from "./router";
 import "./index.css";
+import "./components/homepage/homepage.css";
 
 const queryClient = new QueryClient({
   defaultOptions: {

@@ -1,0 +1,946 @@
+/* ============================================================
+   DRCIP Public Homepage — Slice 3B v2 material + hero language
+   Adapts the ConSentinel design-unit system (Prompt.txt) to DRCIP.
+   Everything is scoped under `.drcip-home` except the hero's
+   design-unit tokens, which are scoped to the hero stage itself.
+
+   Token discipline: colors re-derive from the DRCIP design tokens
+   (cool canvas / ink / muted / cobalt) so the existing Tailwind
+   utilities (bg-canvas, text-ink, border-border, bg-drcip-primary …)
+   resolve correctly without per-page arbitrary values.
+   ============================================================ */
+
+/* ----------------------------------------------------------
+   1. Material tokens — scoped to the public homepage
+   ---------------------------------------------------------- */
+
+.drcip-home {
+  /* DRCIP tokens re-mapped to the homepage's cool editorial material */
+  --brand-canvas: #EFF3F8;         /* cool near-white canvas */
+  --surface-cool: #F3F6FA;         /* alternate band surface   */
+  --surface: #FFFFFF;
+  --ink: #0A1220;                  /* dark blue-black          */
+  --text-secondary: #4E5A6E;
+  --text-muted: #69758C;
+  --border: #D7DEE8;
+
+  --brand-canvas-rgb: 239 243 248;
+  --surface-cool-rgb: 243 246 250;
+  --surface-rgb: 255 255 255;
+  --ink-rgb: 10 18 32;
+  --text-secondary-rgb: 78 90 110;
+  --text-muted-rgb: 105 117 140;
+  --border-rgb: 215 222 232;
+
+  /* Homepage-only material helpers */
+  --home-canvas: #EFF3F8;
+  --home-track: #DEE4EC;
+  --home-accent: #1649B8;
+  --home-accent-2: #2F68F0;
+
+  background: var(--home-canvas);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Homepage headings are Inter (the operational default Manrope/Sora
+   roles belong to the product UI, not this marketing surface). */
+.drcip-home h1,
+.drcip-home h2,
+.drcip-home h3,
+.drcip-home h4 {
+  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* ----------------------------------------------------------
+   2. Shared editorial helpers
+   ---------------------------------------------------------- */
+
+.home-eyebrow {
+  font-size: 13px;
+  font-weight: 470;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--home-accent);
+}
+
+.home-h2 {
+  font-size: clamp(30px, 3.3vw, 46px);
+  font-weight: 500;
+  letter-spacing: -0.028em;
+  line-height: 1.08;
+  color: var(--ink);
+}
+
+.home-lede {
+  margin-top: 20px;
+  max-width: 640px;
+  font-size: 17px;
+  line-height: 1.65;
+  color: var(--text-secondary);
+}
+
+.home-rule {
+  height: 1px;
+  background: var(--border);
+}
+
+.home-mono {
+  font-family: 'IBM Plex Mono', ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Consolas, monospace;
+  font-size: 11.5px;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+/* Editorial figure: framed asset with a caption / coordinate bar */
+.home-figure {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: 0 12px 32px rgba(28, 52, 92, 0.08);
+}
+
+.home-figure-cap {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-top: 1px solid var(--border);
+  padding: 12px 16px;
+  background: var(--surface);
+}
+
+/* ----------------------------------------------------------
+   3. Sticky glass navigation
+   ---------------------------------------------------------- */
+
+.nav-glass {
+  background: rgba(255, 255, 255, 0.72);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.85);
+  -webkit-backdrop-filter: blur(20px) saturate(120%);
+  backdrop-filter: blur(20px) saturate(120%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+/* ----------------------------------------------------------
+   4. Capsule CTA treatments
+   ---------------------------------------------------------- */
+
+.capsule-primary {
+  border-radius: 9999px;
+  background: var(--home-accent);
+  box-shadow: 0 10px 24px rgba(22, 73, 184, 0.22);
+  transition: transform 0.35s cubic-bezier(0.2, 0.7, 0.3, 1), background-color 0.2s ease;
+}
+
+.capsule-primary:hover {
+  transform: translateY(-2px);
+  background: #1d52c8;
+}
+
+.capsule-secondary {
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(215, 222, 232, 0.9);
+  color: var(--ink);
+  transition: transform 0.35s cubic-bezier(0.2, 0.7, 0.3, 1), border-color 0.2s ease, background 0.2s ease;
+}
+
+.capsule-secondary:hover {
+  transform: translateY(-2px);
+  border-color: rgba(22, 73, 184, 0.35);
+  background: rgba(255, 255, 255, 0.85);
+}
+
+/* ============================================================
+   5. HERO STAGE — design-unit system (reference §1–6)
+   The hero is a full-viewport art-directed composition. Every
+   foreground size/offset is `calc(N*var(--u))` where --u is one
+   reference pixel of the 1280×960 comp, scaled to the viewport.
+   ============================================================ */
+
+.drcip-hero {
+  position: relative;
+  min-height: 100vh;
+  overflow: hidden;
+  isolation: isolate;
+  background: var(--brand-canvas);
+  color: var(--ink);
+}
+
+@supports (min-height: 100svh) {
+  .drcip-hero {
+    min-height: 100svh;
+  }
+}
+
+/* ── Tier 1 · wide desktop ── */
+@media (min-width: 1024px) {
+  .drcip-hero {
+    --u: min(100vw / 1280, 100vh / 960);
+  }
+  @supports (min-height: 100svh) {
+    .drcip-hero {
+      --u: min(100vw / 1280, 100svh / 960);
+    }
+  }
+}
+
+/* ── Tier 2 · compact / portrait tablet ── */
+@media (min-width: 641px) and (max-width: 1023px) {
+  .drcip-hero {
+    --u: min(100vw / 880, 100vh / 1180);
+  }
+  @supports (min-height: 100svh) {
+    .drcip-hero {
+      --u: min(100vw / 880, 100svh / 1180);
+    }
+  }
+}
+
+/* ── Tier 3 · mobile — two scales: --u (composition + display type)
+      and --t (floored reading/control type) ── */
+@media (max-width: 640px) {
+  .drcip-hero {
+    --u: min(100vw / 600, 100vh / 940);
+    --t: max(var(--u), min(0.85px, 100vh / 780));
+  }
+  @supports (min-height: 100svh) {
+    .drcip-hero {
+      --u: min(100vw / 600, 100svh / 940);
+      --t: max(var(--u), min(0.85px, 100svh / 780));
+    }
+  }
+}
+
+/* ── Stage assets ── */
+.hero-plate {
+  position: absolute;
+  inset: -2px;
+  z-index: 0;
+  width: calc(100% + 4px);
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 42%;
+  transform: scale(1.002);
+  filter: saturate(0.96) brightness(1.01);
+  pointer-events: none;
+}
+
+/* Left-to-right veil: keeps the ink foreground readable over the photo. */
+.hero-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(
+    100deg,
+    rgba(239, 243, 248, 0.92) 0%,
+    rgba(239, 243, 248, 0.6) 34%,
+    rgba(239, 243, 248, 0.16) 64%,
+    rgba(239, 243, 248, 0.04) 82%
+  );
+}
+
+.hero-trace {
+  position: absolute;
+  z-index: 1;
+  right: calc(52 * var(--u));
+  bottom: calc(96 * var(--u));
+  width: calc(360 * var(--u));
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* ── Foreground column (brand-safe top padding clears the 64px nav) ── */
+.hero-fore {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: max(calc(26 * var(--u)), 20px);
+  padding: max(calc(56 * var(--u)), 104px) calc(76 * var(--u))
+    max(calc(36 * var(--u)), 88px);
+}
+
+.hero-main {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(48 * var(--u));
+  min-height: 0;
+  width: 100%;
+}
+
+/* ── Copy column ── */
+.hero-copy {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: calc(690 * var(--u));
+}
+
+.hero-eyebrow {
+  font-size: calc(15.5 * var(--u));
+  font-weight: 470;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--home-accent);
+}
+
+.hero-h1 {
+  margin-top: calc(24 * var(--u));
+  font-size: calc(60 * var(--u));
+  font-weight: 360;
+  letter-spacing: -0.033em;
+  line-height: 1;
+  color: var(--ink);
+}
+
+/* Masked line reveal: the outer span clips, the inner line translates. */
+.hm-mask {
+  display: block;
+  overflow: hidden;
+}
+
+.hm-line {
+  display: block;
+  will-change: transform;
+}
+
+.hero-sub {
+  margin-top: calc(26 * var(--u));
+  max-width: calc(440 * var(--u));
+  font-size: calc(20 * var(--u));
+  line-height: calc(30 * var(--u));
+  color: var(--text-secondary);
+}
+
+.hero-cta {
+  margin-top: calc(34 * var(--u));
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: calc(14 * var(--u));
+}
+
+.hero-cta .capsule-primary,
+.hero-cta .capsule-secondary {
+  min-height: calc(52 * var(--u));
+  padding: 0 calc(26 * var(--u));
+  font-size: calc(16 * var(--u));
+  font-weight: 470;
+}
+
+/* ── Glass panel slot ── */
+.hero-panel {
+  flex: 0 0 auto;
+  width: calc(304 * var(--u));
+}
+
+/* ── Bottom meta row ── */
+.hero-meta {
+  flex: none;
+  margin-top: auto;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.hero-meta .home-mono {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: calc(12.5 * var(--u));
+}
+
+/* ------------------------------------------------
+   Glass panel internals (reference §5 panel)
+   ------------------------------------------------ */
+.hp {
+  width: 100%;
+  border-radius: calc(24 * var(--u));
+  padding: calc(24 * var(--u));
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.18));
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  -webkit-backdrop-filter: blur(calc(26 * var(--u))) saturate(120%);
+  backdrop-filter: blur(calc(26 * var(--u))) saturate(120%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.55),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.18),
+    0 18px 40px rgba(28, 52, 92, 0.08);
+  color: var(--ink);
+}
+
+.hp-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.hp-live {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(7 * var(--u));
+  font-family: 'IBM Plex Mono', ui-monospace, Menlo, Consolas, monospace;
+  font-size: calc(10.5 * var(--u));
+  letter-spacing: 0.14em;
+  color: var(--text-muted);
+}
+
+.hp-dot {
+  width: calc(8 * var(--u));
+  height: calc(8 * var(--u));
+  border-radius: 50%;
+  background: #18794E;
+  box-shadow: 0 0 0 calc(3 * var(--u)) rgba(24, 121, 78, 0.14);
+  transform-origin: center;
+}
+
+.hp-chip {
+  font-family: 'IBM Plex Mono', ui-monospace, Menlo, Consolas, monospace;
+  font-size: calc(10.5 * var(--u));
+  letter-spacing: 0.06em;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(215, 222, 232, 0.9);
+  border-radius: 9999px;
+  padding: calc(4 * var(--u)) calc(10 * var(--u));
+}
+
+.hp-title {
+  margin-top: calc(18 * var(--u));
+  font-size: calc(21 * var(--u));
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  color: var(--ink);
+}
+
+.hp-rows {
+  margin-top: calc(16 * var(--u));
+  display: flex;
+  flex-direction: column;
+  gap: calc(11 * var(--u));
+}
+
+.hp-row {
+  display: flex;
+  align-items: center;
+  gap: calc(8 * var(--u));
+  min-width: 0;
+}
+
+.hp-k {
+  flex: none;
+  font-family: 'IBM Plex Mono', ui-monospace, Menlo, Consolas, monospace;
+  font-size: calc(9.5 * var(--u));
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+}
+
+.hp-v {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: calc(13 * var(--u));
+  color: var(--ink);
+}
+
+.hp-mono {
+  flex: none;
+  font-family: 'IBM Plex Mono', ui-monospace, Menlo, Consolas, monospace;
+  font-size: calc(10.5 * var(--u));
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+}
+
+.hp-sev {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: calc(5 * var(--u));
+  font-size: calc(9.5 * var(--u));
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  border-radius: 9999px;
+  padding: calc(3 * var(--u)) calc(8 * var(--u));
+}
+
+.hp-sev .hp-sev-dot {
+  width: calc(5 * var(--u));
+  height: calc(5 * var(--u));
+  border-radius: 50%;
+}
+
+.hp-sev-high {
+  background: rgba(194, 65, 12, 0.12);
+  color: #b3340a;
+}
+
+.hp-sev-high .hp-sev-dot {
+  background: #C2410C;
+}
+
+.hp-divider {
+  height: 1px;
+  background: rgba(215, 222, 232, 0.9);
+}
+
+.hp-meter-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: calc(4 * var(--u));
+}
+
+.hp-track {
+  margin-top: calc(8 * var(--u));
+  height: calc(7 * var(--u));
+  border-radius: 9999px;
+  background: var(--home-track);
+  overflow: hidden;
+}
+
+.hp-track i {
+  display: block;
+  height: 100%;
+  width: 74%;
+  border-radius: 9999px;
+  background: linear-gradient(90deg, var(--home-accent), var(--home-accent-2));
+  transform-origin: left center;
+}
+
+.hp-foot {
+  margin-top: calc(16 * var(--u));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.hp-foot .hp-mono {
+  font-size: calc(10 * var(--u));
+}
+
+/* ── Tier 2 layout — column stack, panel right-aligned ── */
+@media (min-width: 641px) and (max-width: 1023px) {
+  .hero-fore {
+    gap: calc(40 * var(--u));
+    padding: max(calc(48 * var(--u)), 104px) calc(56 * var(--u)) calc(28 * var(--u));
+  }
+
+  .hero-main {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: calc(44 * var(--u));
+  }
+
+  .hero-copy {
+    max-width: none;
+  }
+
+  .hero-sub {
+    max-width: calc(560 * var(--u));
+  }
+
+  .hero-panel {
+    align-self: flex-end;
+    width: calc(520 * var(--u));
+  }
+
+  .hero-meta {
+    padding-top: calc(8 * var(--u));
+  }
+}
+
+/* ── Tier 3 layout + re-measured reading type in --t ── */
+@media (max-width: 640px) {
+  /* Mobile: the foreground participates in flow so a tall column grows
+     the stage instead of being clipped by an absolute inset. */
+  .hero-fore {
+    position: relative;
+    inset: auto;
+    height: auto;
+    gap: calc(28 * var(--t));
+    padding: max(calc(44 * var(--t)), 96px) calc(24 * var(--t))
+      max(calc(36 * var(--t)), 48px);
+  }
+
+  .hero-main {
+    flex-direction: column;
+    align-items: stretch;
+    gap: calc(30 * var(--t));
+  }
+
+  .hero-eyebrow {
+    font-size: calc(12.5 * var(--t));
+  }
+
+  .hero-h1 {
+    font-size: calc(62 * var(--u));
+    letter-spacing: -0.03em;
+  }
+
+  .hero-sub {
+    font-size: calc(18 * var(--t));
+    line-height: calc(28 * var(--t));
+    max-width: none;
+  }
+
+  .hero-cta {
+    margin-top: calc(26 * var(--t));
+    gap: calc(12 * var(--t));
+  }
+
+  .hero-cta .capsule-primary,
+  .hero-cta .capsule-secondary {
+    min-height: max(calc(52 * var(--t)), 48px);
+    padding: 0 calc(22 * var(--t));
+    font-size: calc(16 * var(--t));
+  }
+
+  .hero-panel {
+    width: 100%;
+  }
+
+  .hero-trace {
+    display: none;
+  }
+
+  .hero-meta .home-mono {
+    font-size: calc(11 * var(--t));
+  }
+
+  /* panel internals re-measured in the floored --t scale */
+  .hp {
+    border-radius: calc(26 * var(--t));
+    padding: calc(22 * var(--t));
+  }
+
+  .hp-live {
+    gap: calc(8 * var(--t));
+    font-size: calc(11 * var(--t));
+  }
+
+  .hp-dot {
+    width: calc(8 * var(--t));
+    height: calc(8 * var(--t));
+  }
+
+  .hp-chip {
+    font-size: calc(11 * var(--t));
+    padding: calc(5 * var(--t)) calc(11 * var(--t));
+  }
+
+  .hp-title {
+    font-size: calc(20 * var(--t));
+  }
+
+  .hp-rows {
+    gap: calc(13 * var(--t));
+  }
+
+  .hp-k {
+    font-size: calc(10.5 * var(--t));
+  }
+
+  .hp-v {
+    font-size: calc(15 * var(--t));
+  }
+
+  .hp-mono {
+    font-size: calc(11.5 * var(--t));
+  }
+
+  .hp-sev {
+    gap: calc(6 * var(--t));
+    font-size: calc(10.5 * var(--t));
+    padding: calc(4 * var(--t)) calc(9 * var(--t));
+  }
+
+  .hp-sev .hp-sev-dot {
+    width: calc(6 * var(--t));
+    height: calc(6 * var(--t));
+  }
+
+  .hp-track {
+    height: calc(8 * var(--t));
+  }
+
+  .hp-foot .hp-mono {
+    font-size: calc(11 * var(--t));
+  }
+}
+
+/* ============================================================
+   6. Reduced motion — the hero renders its settled frame
+   ============================================================ */
+
+@media (prefers-reduced-motion: reduce) {
+  .capsule-primary:hover,
+  .capsule-secondary:hover {
+    transform: none;
+  }
+}
+
+/* ============================================================
+   7. Product surfaces — framed application viewports
+   ============================================================ */
+
+.surface-frame {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: 0 1px 2px rgba(11, 18, 32, 0.04), 0 12px 32px rgba(28, 52, 92, 0.08);
+}
+
+.surface-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--border);
+  padding: 12px 18px;
+  background: rgba(243, 246, 250, 0.6);
+}
+
+.surface-body {
+  padding: 18px;
+}
+
+.sev-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 9999px;
+  padding: 2px 9px 2px 7px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.07em;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+
+.sev-pill .sev-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.sev-LOW {
+  background: rgba(71, 84, 103, 0.12);
+  color: #475467;
+}
+
+.sev-LOW .sev-dot {
+  background: #475467;
+}
+
+.sev-MEDIUM {
+  background: rgba(161, 98, 7, 0.14);
+  color: #8a5304;
+}
+
+.sev-MEDIUM .sev-dot {
+  background: #A16207;
+}
+
+.sev-HIGH {
+  background: rgba(194, 65, 12, 0.13);
+  color: #b3340a;
+}
+
+.sev-HIGH .sev-dot {
+  background: #C2410C;
+}
+
+.sev-CRITICAL {
+  background: rgba(180, 35, 24, 0.12);
+  color: #9f241b;
+}
+
+.sev-CRITICAL .sev-dot {
+  background: #B42318;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 9999px;
+  padding: 2px 9px 2px 7px;
+  font-family: 'IBM Plex Mono', ui-monospace, Menlo, Consolas, monospace;
+  font-size: 10.5px;
+  letter-spacing: 0.09em;
+  line-height: 1.6;
+  white-space: nowrap;
+  background: rgba(215, 222, 232, 0.5);
+  color: var(--text-secondary);
+}
+
+.status-pill .status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--text-muted);
+}
+
+.status-pill.st-ok .status-dot {
+  background: #18794E;
+}
+
+.status-pill.st-go .status-dot {
+  background: #2F68F0;
+}
+
+.status-pill.st-warn .status-dot {
+  background: #C2410C;
+}
+
+/* Map demo surface */
+.demo-map {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background:
+    var(--surface-cool);
+  background-image: url('../../assets/homepage/spatial/drcip-grid.svg');
+  background-size: cover;
+  background-position: center;
+  min-height: 220px;
+}
+
+.demo-map::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: url('../../assets/homepage/spatial/drcip-map-outline.svg');
+  background-size: contain;
+  background-position: center;
+  background-repeat: no-repeat;
+  opacity: 0.9;
+}
+
+.demo-map-marker {
+  position: absolute;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transform: translate(-50%, -50%);
+}
+
+.demo-map-marker .marker-dot {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: #1649B8;
+  box-shadow: 0 0 0 4px rgba(47, 104, 240, 0.15);
+}
+
+.demo-map-marker .marker-id {
+  font-family: 'IBM Plex Mono', ui-monospace, Menlo, Consolas, monospace;
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(215, 222, 232, 0.9);
+  border-radius: 6px;
+  padding: 2px 6px;
+  white-space: nowrap;
+  box-shadow: 0 1px 4px rgba(11, 18, 32, 0.06);
+}
+
+.demo-map .m-critical .marker-dot {
+  background: #B42318;
+  box-shadow: 0 0 0 4px rgba(180, 35, 24, 0.15);
+}
+
+.demo-map .m-high .marker-dot {
+  background: #C2410C;
+  box-shadow: 0 0 0 4px rgba(194, 65, 12, 0.15);
+}
+
+.demo-map .m-medium .marker-dot {
+  background: #A16207;
+  box-shadow: 0 0 0 4px rgba(161, 98, 7, 0.15);
+}
+
+.demo-map .m-low .marker-dot {
+  background: #475467;
+  box-shadow: 0 0 0 4px rgba(71, 84, 103, 0.15);
+}
+
+.demo-map-legend {
+  position: absolute;
+  z-index: 3;
+  right: 10px;
+  bottom: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(215, 222, 232, 0.9);
+  border-radius: 8px;
+  padding: 6px 8px;
+}
+
+.demo-map-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: 'IBM Plex Mono', ui-monospace, Menlo, Consolas, monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+}
+
+.demo-map-legend i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--l, #475467);
+}
+
+.demo-map-cross {
+  position: absolute;
+  z-index: 2;
+  top: 50%;
+  left: 50%;
+  width: 18px;
+  height: 18px;
+  transform: translate(-50%, -50%);
+  opacity: 0.55;
+  border: 1px dashed rgba(10, 18, 32, 0.35);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.demo-map-coord {
+  position: absolute;
+  z-index: 3;
+  left: 10px;
+  bottom: 10px;
+  font-family: 'IBM Plex Mono', ui-monospace, Menlo, Consolas, monospace;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(215, 222, 232, 0.9);
+  border-radius: 8px;
+  padding: 5px 8px;
+}
