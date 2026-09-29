@@ -1,12 +1,18 @@
-import { useState, useEffect, useMemo } from 'react'
+﻿import { useState, useEffect, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Button } from './ui/button'
 import { Card, CardHeader, CardTitle, CardContent } from './ui/card'
 import { Input } from './ui/input'
 import { Select } from './ui/select'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog'
 import { resources, type ResourceSummary, type CreateResourceRequest, type UpdateResourceRequest } from '../lib/resources'
 import { MapPanel } from '../components/MapPanel'
 import { useAuth } from '../contexts/AuthContext'
+import { PageHeader } from '../components/PageHeader'
+import { StatusBadge } from '../components/StatusBadge'
+import { EmptyState } from '../components/EmptyState'
+import { ErrorState } from '../components/ErrorState'
+import { LoadingState } from '../components/LoadingState'
 
 const RESOURCE_TYPES = ['AMBULANCE', 'RESCUE_TEAM', 'FOOD', 'MEDICAL_KIT', 'VEHICLE', 'RELIEF_TRUCK', 'SHELTER', 'VOLUNTEER', 'PERSONNEL']
 const STATUSES = ['AVAILABLE', 'ASSIGNED', 'DEPLOYED', 'UNAVAILABLE', 'MAINTENANCE']
@@ -161,18 +167,18 @@ export function ResourcesPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-xl font-semibold">Resource Inventory</h1>
-        {canManage && (
+      <PageHeader
+        title="Resource Inventory"
+        actions={canManage && (
           <Button size="sm" onClick={openCreate} data-testid="create-resource-btn">New Resource</Button>
         )}
-      </div>
+      />
 
       <Card>
         <CardContent className="pt-4 space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-2">
             <div className="lg:col-span-2">
-              <Input placeholder="Search name or ID..." value={search} onChange={(e) => { setSearch(e.target.value); setPage(1) }} data-testid="search-input" />
+              <Input aria-label="Search resource name or ID" placeholder="Search name or ID..." value={search} onChange={(e) => { setSearch(e.target.value); setPage(1) }} data-testid="search-input" />
             </div>
             <Select value={typeFilter} onChange={(e) => { setTypeFilter(e.target.value); setPage(1) }} aria-label="Filter by resource type">
               <option value="">All types</option>
@@ -186,12 +192,12 @@ export function ResourcesPage() {
               <option value="newest">Newest first</option>
               <option value="oldest">Oldest first</option>
             </Select>
-            <Input placeholder="Capability..." value={capability} onChange={(e) => { setCapability(e.target.value); setPage(1) }} data-testid="capability-input" />
+            <Input aria-label="Filter by capability" placeholder="Capability..." value={capability} onChange={(e) => { setCapability(e.target.value); setPage(1) }} data-testid="capability-input" />
           </div>
           <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
-            <Input placeholder="Lat" type="number" step="any" className="sm:w-24" value={nearbyLat} onChange={(e) => setNearbyLat(e.target.value)} data-testid="nearby-lat" />
-            <Input placeholder="Lng" type="number" step="any" className="sm:w-24" value={nearbyLng} onChange={(e) => setNearbyLng(e.target.value)} data-testid="nearby-lng" />
-            <Input placeholder="Radius km" type="number" step="any" className="col-span-2 sm:col-span-1 sm:w-24" value={nearbyRadius} onChange={(e) => setNearbyRadius(e.target.value)} data-testid="nearby-radius" />
+            <Input aria-label="Latitude for nearby search" placeholder="Lat" type="number" step="any" className="sm:w-24" value={nearbyLat} onChange={(e) => setNearbyLat(e.target.value)} data-testid="nearby-lat" />
+            <Input aria-label="Longitude for nearby search" placeholder="Lng" type="number" step="any" className="sm:w-24" value={nearbyLng} onChange={(e) => setNearbyLng(e.target.value)} data-testid="nearby-lng" />
+            <Input aria-label="Radius in km for nearby search" placeholder="Radius km" type="number" step="any" className="col-span-2 sm:col-span-1 sm:w-24" value={nearbyRadius} onChange={(e) => setNearbyRadius(e.target.value)} data-testid="nearby-radius" />
             <Button size="sm" variant={nearbyActive ? 'default' : 'outline'} className="col-span-2 sm:col-span-1 sm:w-auto" onClick={() => { setNearbyActive(!nearbyActive); setPage(1) }} data-testid="nearby-toggle">
               {nearbyActive ? 'Nearby On' : 'Nearby Off'}
             </Button>
@@ -207,11 +213,15 @@ export function ResourcesPage() {
           </CardHeader>
           <CardContent>
             {isLoading ? (
-              <div className="text-center py-16 text-muted-foreground" role="status">Loading map...</div>
+              <LoadingState label="Loading map…" className="justify-center py-16" />
             ) : error ? (
-              <div className="text-center py-16 text-destructive text-sm">{(error as Error).message || 'Failed to load resources'}</div>
+              <ErrorState
+                title="Failed to load resources"
+                description={(error as Error).message}
+                retry={() => refetch()}
+              />
             ) : markers.length === 0 ? (
-              <div className="text-center py-16 text-muted-foreground text-sm">No resources with location to display.</div>
+              <EmptyState title="No resources with location to display." description="Resources appear on the map once a location is available." />
             ) : (
               <MapPanel center={[markers[0].lat, markers[0].lng]} zoom={6} markers={markers} height="h-80" />
             )}
@@ -224,14 +234,19 @@ export function ResourcesPage() {
           </CardHeader>
           <CardContent className="space-y-3">
             {isLoading ? (
-              <div className="text-center py-16 text-muted-foreground" role="status">Loading resources...</div>
+              <LoadingState label="Loading resources…" className="justify-center py-16" />
             ) : error ? (
-              <div className="text-center py-16 text-destructive text-sm">{(error as Error).message || 'Failed to load resources'}</div>
+              <ErrorState
+                title="Failed to load resources"
+                description={(error as Error).message}
+                retry={() => refetch()}
+              />
             ) : items.length === 0 ? (
-              <div className="text-center py-16">
-                <p className="text-muted-foreground">No resources match the current filters.</p>
-                <Button variant="outline" size="sm" className="mt-3" onClick={handleFiltersReset}>Clear filters</Button>
-              </div>
+              <EmptyState
+                title="No resources match the current filters."
+                description="Adjust or clear the filters above to see more resources."
+                action={<Button variant="outline" size="sm" onClick={handleFiltersReset}>Clear filters</Button>}
+              />
             ) : (
               <ul className="divide-y" role="list">
                 {items.map((r) => (
@@ -240,9 +255,9 @@ export function ResourcesPage() {
                       <div className="drcip-dense-row-content">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-medium text-sm break-all">{r.id}</span>
-                          <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 text-xs">{r.status}</span>
-                          <span className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 text-xs">{r.resource_type}</span>
-                          {r.is_own_team && <span className="px-2 py-0.5 rounded-full bg-green-100 text-green-800 text-xs">Your Team</span>}
+                          <StatusBadge status={r.status} />
+                          <span className="px-2 py-0.5 rounded-drcip-md bg-surface-cool text-text-secondary text-xs">{r.resource_type}</span>
+                          {r.is_own_team && <span className="px-2 py-0.5 rounded-drcip-md bg-surface-cool text-text-secondary text-xs">Your Team</span>}
                         </div>
                         <p className="text-sm text-muted-foreground mt-1 break-words">{r.name}</p>
                         <p className="text-xs text-muted-foreground mt-0.5 break-words">
@@ -273,55 +288,56 @@ export function ResourcesPage() {
         </Card>
       </div>
 
-      {formOpen && (
-        <div className="fixed inset-0 z-[9999] bg-black/50 flex items-center justify-center p-4" onClick={() => setFormOpen(false)}>
-          <div className="bg-white rounded-lg p-6 w-full max-w-lg shadow-lg max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-lg font-semibold mb-4">{editing ? `Edit ${editing.id}` : 'Create Resource'}</h2>
-            {formError && <div className="mb-3 p-2 rounded bg-red-50 text-red-700 text-sm" role="alert">{formError}</div>}
+      <Dialog open={formOpen} onOpenChange={setFormOpen}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{editing ? `Edit ${editing.id}` : 'Create Resource'}</DialogTitle>
+          </DialogHeader>
+          {formError && <div className="p-2 rounded-drcip-md bg-destructive/10 text-destructive text-sm" role="alert">{formError}</div>}
             <form onSubmit={handleSubmit} className="space-y-3">
               <div>
-                <label className="block text-sm font-medium mb-1">Type</label>
-                <Select value={form.resource_type} onChange={(e) => setForm({ ...form, resource_type: e.target.value })} disabled={!!editing} data-testid="form-type">
+                <label htmlFor="resource-form-type" className="block text-sm font-medium mb-1">Type</label>
+                <Select id="resource-form-type" value={form.resource_type} onChange={(e) => setForm({ ...form, resource_type: e.target.value })} disabled={!!editing} data-testid="form-type">
                   {RESOURCE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
                 </Select>
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">Name</label>
-                <Input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Resource name" data-testid="form-name" />
+                <label htmlFor="resource-form-name" className="block text-sm font-medium mb-1">Name</label>
+                <Input id="resource-form-name" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Resource name" data-testid="form-name" />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">Status</label>
-                <Select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} data-testid="form-status">
+                <label htmlFor="resource-form-status" className="block text-sm font-medium mb-1">Status</label>
+                <Select id="resource-form-status" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} data-testid="form-status">
                   {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
                 </Select>
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-sm font-medium mb-1">Quantity</label>
-                  <Input type="number" min="0" step="1" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: Number(e.target.value) })} data-testid="form-quantity" />
+                  <label htmlFor="resource-form-quantity" className="block text-sm font-medium mb-1">Quantity</label>
+                  <Input id="resource-form-quantity" type="number" min="0" step="1" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: Number(e.target.value) })} data-testid="form-quantity" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-1">Unit</label>
-                  <Input value={form.unit ?? ''} onChange={(e) => setForm({ ...form, unit: e.target.value || undefined })} placeholder="e.g. vehicles, kits" data-testid="form-unit" />
+                  <label htmlFor="resource-form-unit" className="block text-sm font-medium mb-1">Unit</label>
+                  <Input id="resource-form-unit" value={form.unit ?? ''} onChange={(e) => setForm({ ...form, unit: e.target.value || undefined })} placeholder="e.g. vehicles, kits" data-testid="form-unit" />
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">Capacity</label>
-                <Input type="number" min="0" step="1" value={form.capacity ?? ''} onChange={(e) => setForm({ ...form, capacity: e.target.value ? Number(e.target.value) : undefined })} data-testid="form-capacity" />
+                <label htmlFor="resource-form-capacity" className="block text-sm font-medium mb-1">Capacity</label>
+                <Input id="resource-form-capacity" type="number" min="0" step="1" value={form.capacity ?? ''} onChange={(e) => setForm({ ...form, capacity: e.target.value ? Number(e.target.value) : undefined })} data-testid="form-capacity" />
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-sm font-medium mb-1">Latitude</label>
-                  <Input type="number" step="any" value={form.latitude ?? ''} onChange={(e) => setForm({ ...form, latitude: e.target.value ? Number(e.target.value) : undefined })} data-testid="form-lat" />
+                  <label htmlFor="resource-form-lat" className="block text-sm font-medium mb-1">Latitude</label>
+                  <Input id="resource-form-lat" type="number" step="any" value={form.latitude ?? ''} onChange={(e) => setForm({ ...form, latitude: e.target.value ? Number(e.target.value) : undefined })} data-testid="form-lat" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-1">Longitude</label>
-                  <Input type="number" step="any" value={form.longitude ?? ''} onChange={(e) => setForm({ ...form, longitude: e.target.value ? Number(e.target.value) : undefined })} data-testid="form-lng" />
+                  <label htmlFor="resource-form-lng" className="block text-sm font-medium mb-1">Longitude</label>
+                  <Input id="resource-form-lng" type="number" step="any" value={form.longitude ?? ''} onChange={(e) => setForm({ ...form, longitude: e.target.value ? Number(e.target.value) : undefined })} data-testid="form-lng" />
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">Contact Reference</label>
-                <Input value={form.contact_reference ?? ''} onChange={(e) => setForm({ ...form, contact_reference: e.target.value || undefined })} data-testid="form-contact" />
+                <label htmlFor="resource-form-contact" className="block text-sm font-medium mb-1">Contact Reference</label>
+                <Input id="resource-form-contact" value={form.contact_reference ?? ''} onChange={(e) => setForm({ ...form, contact_reference: e.target.value || undefined })} data-testid="form-contact" />
               </div>
               <div className="flex justify-end gap-2 pt-2">
                 <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>Cancel</Button>
@@ -330,9 +346,8 @@ export function ResourcesPage() {
                 </Button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

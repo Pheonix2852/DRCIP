@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { Link, useSearchParams } from 'react-router-dom'
 import api from '../lib/api'
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from './ui/card'
+import { Card, CardHeader, CardDescription, CardContent } from './ui/card'
 import { Input } from './ui/input'
 import { Button } from './ui/button'
 
@@ -67,7 +67,7 @@ export function ResetPasswordPage() {
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md">
         <CardHeader>
-          <CardTitle>Reset Password</CardTitle>
+          <h1 className="text-2xl font-semibold leading-none tracking-tight">Reset Password</h1>
           <CardDescription>
             {step === 'request' ? 'Enter your email to receive a reset token.' : 'Enter the token from your email and your new password.'}
           </CardDescription>
@@ -80,7 +80,7 @@ export function ResetPasswordPage() {
                 <Input id="reset-email" type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} required disabled={requestMutation.isPending} />
               </div>
               {feedback && (
-                <div role="status" className={`text-sm p-2 rounded ${feedback.type === 'error' ? 'bg-red-50 text-red-800' : 'bg-green-50 text-green-800'}`}>
+                <div role="status" className={`text-sm p-2 rounded ${feedback.type === 'error' ? 'bg-status-error/10 text-status-error' : 'bg-status-success/10 text-status-success'}`}>
                   {feedback.message}
                 </div>
               )}
@@ -104,7 +104,7 @@ export function ResetPasswordPage() {
                 <Input id="reset-confirm-pw" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required disabled={confirmMutation.isPending} />
               </div>
               {feedback && (
-                <div role="status" className={`text-sm p-2 rounded ${feedback.type === 'error' ? 'bg-red-50 text-red-800' : 'bg-green-50 text-green-800'}`}>
+                <div role="status" className={`text-sm p-2 rounded ${feedback.type === 'error' ? 'bg-status-error/10 text-status-error' : 'bg-status-success/10 text-status-success'}`}>
                   {feedback.message}
                 </div>
               )}

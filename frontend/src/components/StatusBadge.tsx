@@ -11,6 +11,7 @@ const STATUS_TONE: Record<string, { tone: string; label?: string }> = {
   SUCCESS: { tone: 'success' },
   OK: { tone: 'success' },
   ON: { tone: 'success' },
+  HEALTHY: { tone: 'success' },
   TRUE: { tone: 'success', label: 'Active' },
   /* warning */
   MAINTENANCE: { tone: 'warning' },
@@ -28,6 +29,7 @@ const STATUS_TONE: Record<string, { tone: string; label?: string }> = {
   PARTIAL: { tone: 'info' },
   /* error */
   UNAVAILABLE: { tone: 'error' },
+  UNHEALTHY: { tone: 'error' },
   FAILED: { tone: 'error' },
   ERROR: { tone: 'error' },
   OFFLINE: { tone: 'error' },

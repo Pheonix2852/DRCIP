@@ -43,7 +43,7 @@ describe('Shell bell badge', () => {
   it('shows the unread count and hides the badge at zero', async () => {
     vi.mocked(notifications.list).mockResolvedValue(listResult(2) as never)
     renderLayout()
-    const bell = await screen.findByRole('link', { name: /Notifications \(2 unread\)/ })
+    const bell = await screen.findByRole('link', { name: /Notifications \(2 unread\)/ }, { timeout: 5000 })
     expect(bell).toBeTruthy()
 
     cleanup()

@@ -4,9 +4,15 @@ import { Button } from './ui/button'
 import { Card, CardHeader, CardTitle, CardContent } from './ui/card'
 import { Input } from './ui/input'
 import { Select } from './ui/select'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog'
 import { teams, canManageTeams, type TeamSummary, type CreateTeamRequest, type UpdateTeamRequest } from '../lib/teams'
 import api from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
+import { PageHeader } from '../components/PageHeader'
+import { StatusBadge } from '../components/StatusBadge'
+import { EmptyState } from '../components/EmptyState'
+import { ErrorState } from '../components/ErrorState'
+import { LoadingState } from '../components/LoadingState'
 
 const TEAM_STATUSES = ['ACTIVE', 'DEPLOYED', 'UNAVAILABLE', 'MAINTENANCE']
 const PAGE_SIZE = 20
@@ -17,16 +23,6 @@ interface UserSummary {
   email: string
   role: string
   is_active: boolean
-}
-
-function statusColor(status: string): string {
-  switch (status) {
-    case 'ACTIVE': return 'bg-green-100 text-green-800'
-    case 'DEPLOYED': return 'bg-blue-100 text-blue-800'
-    case 'UNAVAILABLE': return 'bg-red-100 text-red-800'
-    case 'MAINTENANCE': return 'bg-amber-100 text-amber-800'
-    default: return 'bg-gray-100 text-gray-700'
-  }
 }
 
 export function TeamsPage() {
@@ -48,6 +44,7 @@ export function TeamsPage() {
   const [memberName, setMemberName] = useState('')
   const [memberRole, setMemberRole] = useState('')
   const [memberContact, setMemberContact] = useState('')
+  const [actionError, setActionError] = useState('')
 
   const params = useMemo(() => ({
     page,
@@ -103,12 +100,14 @@ export function TeamsPage() {
   const statusMutation = useMutation({
     mutationFn: ({ id, status }: { id: string; status: string }) => teams.updateStatus(id, status),
     onSuccess: invalidate,
+    onError: (err: Error) => setActionError(err.message),
   })
 
   const memberMutation = useMutation({
     mutationFn: ({ id, name: n, role, contact }: { id: string; name: string; role: string; contact?: string }) =>
       teams.addMember(id, { member_name: n, member_role: role, contact_reference: contact }),
     onSuccess: () => { invalidate(); setMemberName(''); setMemberRole(''); setMemberContact('') },
+    onError: (err: Error) => setActionError(err.message),
   })
 
   const items: TeamSummary[] = data?.items ?? []
@@ -163,15 +162,15 @@ export function TeamsPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-xl font-semibold">Field Team Management</h1>
-        {canManage && <Button size="sm" onClick={openCreate} data-testid="create-team-btn">New Team</Button>}
-      </div>
+      <PageHeader
+        title="Field Team Management"
+        actions={canManage && <Button size="sm" onClick={openCreate} data-testid="create-team-btn">New Team</Button>}
+      />
 
       <Card>
         <CardContent className="pt-4">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-            <Input placeholder="Search team or leader..." value={search} onChange={(e) => { setSearch(e.target.value); setPage(1) }} data-testid="team-search" />
+            <Input aria-label="Search team or leader" placeholder="Search team or leader..." value={search} onChange={(e) => { setSearch(e.target.value); setPage(1) }} data-testid="team-search" />
             <Select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1) }} aria-label="Filter by team status">
               <option value="">All statuses</option>
               {TEAM_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
@@ -185,12 +184,17 @@ export function TeamsPage() {
           <CardTitle className="text-base">Teams ({data?.pagination?.total ?? 0})</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
+          {actionError && <p className="text-sm text-status-error" role="alert">Failed to update team: {actionError}</p>}
           {isLoading ? (
-            <div className="text-center py-12 text-muted-foreground" role="status">Loading teams...</div>
+            <LoadingState label="Loading teams…" className="justify-center py-12" />
           ) : error ? (
-            <div className="text-center py-12 text-destructive text-sm">{(error as Error).message || 'Failed to load teams'}</div>
+            <ErrorState
+              title="Failed to load teams"
+              description={(error as Error).message}
+              retry={() => refetch()}
+            />
           ) : items.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">No teams found.</div>
+            <EmptyState title="No teams found." description="No field teams match the current filters." />
           ) : (
             <ul className="divide-y" role="list">
               {items.map((t) => (
@@ -199,7 +203,7 @@ export function TeamsPage() {
                     <div className="drcip-dense-row-content">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-medium text-sm break-all">{t.id}</span>
-                        <span className={`px-2 py-0.5 rounded-full text-xs ${statusColor(t.status)}`}>{t.status}</span>
+                        <StatusBadge status={t.status} />
                       </div>
                       <p className="text-sm mt-1 break-words">{t.name}</p>
                       <p className="text-xs text-muted-foreground mt-0.5 break-words">
@@ -239,69 +243,69 @@ export function TeamsPage() {
         </CardContent>
       </Card>
 
-      {formOpen && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={closeForm}>
-          <div className="bg-white rounded-lg p-6 w-full max-w-md shadow-lg" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-lg font-semibold mb-4">{editing ? `Edit ${editing.id}` : 'Create Team'}</h2>
-            {formError && <div className="mb-3 p-2 rounded bg-red-50 text-red-700 text-sm" role="alert">{formError}</div>}
-            <form onSubmit={handleSubmit} className="space-y-3">
+      <Dialog open={formOpen} onOpenChange={(open) => open ? setFormOpen(true) : closeForm()}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editing ? `Edit ${editing.id}` : 'Create Team'}</DialogTitle>
+          </DialogHeader>
+          {formError && <div className="p-2 rounded-drcip-md bg-destructive/10 text-destructive text-sm" role="alert">{formError}</div>}
+          <form onSubmit={handleSubmit} className="space-y-3">
+            <div>
+              <label htmlFor="team-form-name" className="block text-sm font-medium mb-1">Team Name</label>
+              <Input id="team-form-name" required value={name} onChange={(e) => setName(e.target.value)} data-testid="team-name" />
+            </div>
+            {!editing && (
               <div>
-                <label className="block text-sm font-medium mb-1">Team Name</label>
-                <Input required value={name} onChange={(e) => setName(e.target.value)} data-testid="team-name" />
+                <label htmlFor="team-form-leader" className="block text-sm font-medium mb-1">Leader (Field Officer)</label>
+                <Select id="team-form-leader" value={leaderUserId} onChange={(e) => setLeaderUserId(e.target.value)} data-testid="team-leader">
+                  <option value="">
+                    {loadingCandidates ? 'Loading candidates...' : 'Select a Field Officer...'}
+                  </option>
+                  {availableOfficers.map((u) => (
+                    <option key={u.id} value={u.id}>{u.name} ({u.id})</option>
+                  ))}
+                </Select>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Officers already leading another team are excluded. The server validates the leader.
+                </p>
               </div>
-              {!editing && (
-                <div>
-                  <label className="block text-sm font-medium mb-1">Leader (Field Officer)</label>
-                  <Select value={leaderUserId} onChange={(e) => setLeaderUserId(e.target.value)} data-testid="team-leader">
-                    <option value="">
-                      {loadingCandidates ? 'Loading candidates...' : 'Select a Field Officer...'}
-                    </option>
-                    {availableOfficers.map((u) => (
-                      <option key={u.id} value={u.id}>{u.name} ({u.id})</option>
-                    ))}
-                  </Select>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Officers already leading another team are excluded. The server validates the leader.
-                  </p>
-                </div>
-              )}
-              <div className="flex justify-end gap-2 pt-2">
-                <Button type="button" variant="outline" onClick={closeForm}>Cancel</Button>
-                <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending} data-testid="team-submit">
-                  {createMutation.isPending || updateMutation.isPending ? 'Saving...' : editing ? 'Update' : 'Create'}
-                </Button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+            )}
+            <div className="flex justify-end gap-2 pt-2">
+              <Button type="button" variant="outline" onClick={closeForm}>Cancel</Button>
+              <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending} data-testid="team-submit">
+                {createMutation.isPending || updateMutation.isPending ? 'Saving...' : editing ? 'Update' : 'Create'}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
 
-      {memberTeam && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setMemberTeam(null)}>
-          <div className="bg-white rounded-lg p-6 w-full max-w-md shadow-lg max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-lg font-semibold mb-4">Members — {memberTeam.id}</h2>
-            <ul className="divide-y mb-4" role="list">
-              {memberTeam.members.length === 0 && <li className="py-2 text-sm text-muted-foreground">No members yet.</li>}
-              {memberTeam.members.map((m) => (
-                <li key={m.id} className="py-2 text-sm">
-                  <span className="font-medium">{m.member_name}</span>
-                  <span className="text-muted-foreground"> — {m.member_role}</span>
-                  {m.contact_reference && <span className="text-muted-foreground"> ({m.contact_reference})</span>}
-                </li>
-              ))}
-            </ul>
-            <form onSubmit={handleAddMember} className="space-y-2 border-t pt-3">
-              <Input placeholder="Member name" value={memberName} onChange={(e) => setMemberName(e.target.value)} data-testid="member-name" />
-              <Input placeholder="Member role" value={memberRole} onChange={(e) => setMemberRole(e.target.value)} data-testid="member-role" />
-              <Input placeholder="Contact (optional)" value={memberContact} onChange={(e) => setMemberContact(e.target.value)} data-testid="member-contact" />
-              <div className="flex justify-end gap-2 pt-1">
-                <Button type="button" variant="outline" onClick={() => setMemberTeam(null)}>Close</Button>
-                <Button type="submit" disabled={memberMutation.isPending} data-testid="member-submit">Add Member</Button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <Dialog open={!!memberTeam} onOpenChange={(open) => { if (!open) setMemberTeam(null) }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Members — {memberTeam?.id}</DialogTitle>
+          </DialogHeader>
+          <ul className="divide-y mb-4" role="list">
+            {memberTeam?.members.length === 0 && <li className="py-2 text-sm text-muted-foreground">No members yet.</li>}
+            {memberTeam?.members.map((m) => (
+              <li key={m.id} className="py-2 text-sm">
+                <span className="font-medium">{m.member_name}</span>
+                <span className="text-muted-foreground"> — {m.member_role}</span>
+                {m.contact_reference && <span className="text-muted-foreground"> ({m.contact_reference})</span>}
+              </li>
+            ))}
+          </ul>
+          <form onSubmit={handleAddMember} className="space-y-2 border-t pt-3">
+            <Input aria-label="Member name" placeholder="Member name" value={memberName} onChange={(e) => setMemberName(e.target.value)} data-testid="member-name" />
+            <Input aria-label="Member role" placeholder="Member role" value={memberRole} onChange={(e) => setMemberRole(e.target.value)} data-testid="member-role" />
+            <Input aria-label="Contact (optional)" placeholder="Contact (optional)" value={memberContact} onChange={(e) => setMemberContact(e.target.value)} data-testid="member-contact" />
+            <div className="flex justify-end gap-2 pt-1">
+              <Button type="button" variant="outline" onClick={() => setMemberTeam(null)}>Close</Button>
+              <Button type="submit" disabled={memberMutation.isPending} data-testid="member-submit">Add Member</Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

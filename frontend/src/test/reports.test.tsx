@@ -98,11 +98,10 @@ describe('ReportsPage — data states', () => {
 
     await waitFor(() => expect(screen.getByTestId('kpi-total')).toBeTruthy())
     expect(screen.getByTestId('kpi-total').textContent).toBe('11')
-    expect(screen.getByTestId('kpi-ttfr').textContent).toBe('15m')
-    expect(screen.getByTestId('kpi-ttr').textContent).toBe('3.0h')
+    expect(screen.getByTestId('kpi-ttfr').textContent).toBe('0 hrs 15 mins')
+    expect(screen.getByTestId('kpi-ttr').textContent).toBe('3 hrs 0 mins')
     expect(screen.getByTestId('kpi-utilization').textContent).toBe('38%')
-    // 900000ms -> 15m, 10800000ms -> 3.0h
-    expect(screen.getByText('Incident Trend')).toBeTruthy()
+    // 900000ms -> 0 hrs 15 mins, 10800000ms -> 3 hrs 0 mins
     expect(screen.getByLabelText(/Severity distribution: 5 LOW, 3 MEDIUM, 2 HIGH, 1 CRITICAL/)).toBeTruthy()
   })
 

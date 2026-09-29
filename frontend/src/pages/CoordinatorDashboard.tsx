@@ -7,11 +7,18 @@ import { Input } from './ui/input'
 import { Select } from './ui/select'
 import { incidents, type IncidentSummary } from '../lib/incidents'
 import { capacity } from '../lib/capacity'
-import { severityColor } from '../lib/severityColor'
 import { MapPanel } from '../components/MapPanel'
 import { WeatherPanel } from '../components/WeatherPanel'
 import { useRealtime } from '../hooks/useRealtime'
 import { useAuth } from '../contexts/AuthContext'
+import { PageHeader } from '../components/PageHeader'
+import { StatusBadge } from '../components/StatusBadge'
+import { SeverityBadge } from '../components/SeverityBadge'
+import { UnavailableState } from '../components/UnavailableState'
+import { EmptyState } from '../components/EmptyState'
+import { ErrorState } from '../components/ErrorState'
+import { Skeleton } from './ui/skeleton'
+import { KpiCard } from '../components/KpiCard'
 
 const STATUSES = ['REPORTED', 'TRIAGE_PENDING', 'IN_RESPONSE', 'RESOLVED']
 const DISASTER_TYPES = ['FLOOD', 'CYCLONE', 'FIRE', 'EARTHQUAKE', 'BUILDING_COLLAPSE', 'MEDICAL_EMERGENCY', 'ROAD_BLOCKAGE', 'LANDSLIDE']
@@ -92,31 +99,34 @@ export function CoordinatorDashboard() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-xl font-semibold">Coordinator Command Center</h1>
-        <div className="flex flex-wrap gap-2">
-          <Card className="px-3 py-1">
-            <span className="text-xs text-muted-foreground">Resources:</span> {capacityData?.available_resources ?? '-'}
-          </Card>
-          <Card className="px-3 py-1">
-            <span className="text-xs text-muted-foreground">Teams:</span> {capacityData?.active_teams ?? '-'}
-          </Card>
-          <Card className="px-3 py-1">
-            <span className="text-xs text-muted-foreground">Shelter:</span> {capacityData?.available_shelter_capacity ?? '-'}
-          </Card>
-        </div>
-        {wsStatus !== 'open' && (
-          <span className="text-xs px-3 py-1 rounded-full bg-amber-100 text-amber-800" role="status">
-            {wsStatus === 'reconnecting' ? 'Realtime reconnecting...' : 'Realtime unavailable — updates will be fetched'}{' '}
-            <button className="underline ml-1" onClick={() => refreshAll()}>Refresh now</button>
-          </span>
-        )}
+        <PageHeader title="Coordinator Command Center" className="mb-0" />
       </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <KpiCard label="Resources" value={capacityData?.available_resources ?? '—'} />
+        <KpiCard label="Active Teams" value={capacityData?.active_teams ?? '—'} />
+        <KpiCard label="Shelter Capacity" value={capacityData?.available_shelter_capacity ?? '—'} />
+        <KpiCard label="Incidents (24h)" value={data?.pagination?.total ?? 0} />
+      </div>
+
+      {(wsStatus === 'closed' || wsStatus === 'reconnecting') && (
+        <UnavailableState
+          tone="degraded"
+          title={wsStatus === 'reconnecting' ? 'Realtime reconnecting…' : 'Realtime unavailable — updates will be fetched'}
+          description="Incident and capacity figures below are from the last successful fetch. They may be out of date until the connection recovers."
+          action={
+            <Button variant="outline" size="sm" onClick={refreshAll} data-testid="refresh-now">
+              Refresh now
+            </Button>
+          }
+        />
+      )}
 
       <Card>
         <CardContent className="pt-4 space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-2">
             <div className="lg:col-span-2">
-              <Input placeholder="Search description or ID..." value={search} onChange={(e) => { setSearch(e.target.value); setPage(1) }} data-testid="search-input" />
+              <Input aria-label="Search description or ID" placeholder="Search description or ID..." value={search} onChange={(e) => { setSearch(e.target.value); setPage(1) }} data-testid="search-input" />
             </div>
             <Select value={status} onChange={(e) => { setStatus(e.target.value); setPage(1) }} aria-label="Filter by status">
               <option value="">All statuses</option>
@@ -149,11 +159,18 @@ export function CoordinatorDashboard() {
             </CardHeader>
             <CardContent>
               {isLoading ? (
-                <div className="text-center py-16 text-muted-foreground" role="status">Loading map...</div>
+                <div className="space-y-4">
+                  <Skeleton className="h-80 w-full rounded-drcip-md" />
+                  <Skeleton className="h-40 w-full rounded-drcip-md" />
+                </div>
               ) : error ? (
-                <div className="text-center py-16 text-destructive text-sm">{(error as Error).message || 'Failed to load incidents'}</div>
+                <ErrorState
+                  title="Failed to load incidents"
+                  description={(error as Error).message}
+                  retry={() => refetch()}
+                />
               ) : markers.length === 0 ? (
-                <div className="text-center py-16 text-muted-foreground text-sm">No incidents with location to display.</div>
+                <EmptyState title="No incidents with location to display." description="Incidents appear on the map once a reported location is available." />
               ) : (
                 <MapPanel center={[markers[0].lat, markers[0].lng]} zoom={6} markers={markers} height="h-80" />
               )}
@@ -172,14 +189,23 @@ export function CoordinatorDashboard() {
         </CardHeader>
         <CardContent className="space-y-3">
           {isLoading ? (
-            <div className="text-center py-16 text-muted-foreground" role="status">Loading incidents...</div>
-          ) : error ? (
-            <div className="text-center py-16 text-destructive text-sm">{(error as Error).message || 'Failed to load incidents'}</div>
-          ) : items.length === 0 ? (
-            <div className="text-center py-16">
-              <p className="text-muted-foreground">No incidents match the current filters.</p>
-              <Button variant="outline" size="sm" className="mt-3" onClick={handleFiltersReset}>Clear filters</Button>
+            <div className="space-y-3">
+              {[...Array(5)].map((_, i) => (
+                <Skeleton key={i} className="h-16 w-full rounded-drcip-md" />
+              ))}
             </div>
+          ) : error ? (
+            <ErrorState
+              title="Failed to load incidents"
+              description={(error as Error).message}
+              retry={() => refetch()}
+            />
+          ) : items.length === 0 ? (
+            <EmptyState
+              title="No incidents match the current filters."
+              description="Adjust or clear the filters above to see more incidents."
+              action={<Button variant="outline" size="sm" onClick={handleFiltersReset}>Clear filters</Button>}
+            />
           ) : (
             <ul className="divide-y" role="list">
               {items.map((inc) => (
@@ -188,21 +214,16 @@ export function CoordinatorDashboard() {
                     <div className="flex items-start justify-between gap-2 flex-wrap">
                       <span className="font-medium text-sm min-w-0 flex-1 break-all">{inc.id}</span>
                       <span className="flex gap-1 flex-wrap justify-end">
-                        <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 text-xs">{inc.status}</span>
+                        <StatusBadge status={inc.status} />
                         {inc.confirmed_severity && (
-                          <span
-                            className="px-2 py-0.5 rounded-full text-white text-xs"
-                            style={{ backgroundColor: severityColor(inc.confirmed_severity) }}
-                          >
-                            {inc.confirmed_severity}
-                          </span>
+                          <SeverityBadge severity={inc.confirmed_severity} />
                         )}
                       </span>
                     </div>
                     <p className="text-sm text-muted-foreground mt-1 line-clamp-2 break-words">{inc.description}</p>
                     <p className="text-xs text-muted-foreground mt-1 break-words">
-                      {inc.disaster_type} • {new Date(inc.created_at).toLocaleString()}
-                      {inc.latitude != null && inc.longitude != null && ` • ${inc.latitude.toFixed(4)}, ${inc.longitude.toFixed(4)}`}
+                      {inc.disaster_type} · {new Date(inc.created_at).toLocaleString()}
+                      {inc.latitude != null && inc.longitude != null && ` · ${inc.latitude.toFixed(4)}, ${inc.longitude.toFixed(4)}`}
                     </p>
                   </Link>
                 </li>

@@ -1,22 +1,19 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useState } from 'react'
 import { Card, CardHeader, CardTitle, CardContent } from './ui/card'
 import { Select } from './ui/select'
 import { teams } from '../lib/teams'
+import { PageHeader } from '../components/PageHeader'
+import { StatusBadge } from '../components/StatusBadge'
+import { EmptyState } from '../components/EmptyState'
+import { ErrorState } from '../components/ErrorState'
+import { LoadingState } from '../components/LoadingState'
 
 const TEAM_STATUSES = ['ACTIVE', 'DEPLOYED', 'UNAVAILABLE', 'MAINTENANCE']
 
-function statusColor(status: string): string {
-  switch (status) {
-    case 'ACTIVE': return 'bg-green-100 text-green-800'
-    case 'DEPLOYED': return 'bg-blue-100 text-blue-800'
-    case 'UNAVAILABLE': return 'bg-red-100 text-red-800'
-    case 'MAINTENANCE': return 'bg-amber-100 text-amber-800'
-    default: return 'bg-gray-100 text-gray-700'
-  }
-}
-
 export function TeamStatusPage() {
   const queryClient = useQueryClient()
+  const [statusError, setStatusError] = useState('')
 
   const { data: team, isLoading, error } = useQuery({
     queryKey: ['teams', 'me'],
@@ -26,13 +23,14 @@ export function TeamStatusPage() {
   const statusMutation = useMutation({
     mutationFn: (status: string) => teams.updateStatus(team!.id, status),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['teams', 'me'] }),
+    onError: (err: Error) => setStatusError(err.message),
   })
 
   if (isLoading) {
     return (
       <div className="max-w-4xl mx-auto space-y-4">
-        <h1 className="text-xl font-semibold">My Team</h1>
-        <div className="text-center py-16 text-muted-foreground" role="status">Loading team...</div>
+        <PageHeader title="My Team" />
+        <LoadingState label="Loading team…" className="justify-center py-16" />
       </div>
     )
   }
@@ -40,8 +38,8 @@ export function TeamStatusPage() {
   if (error) {
     return (
       <div className="max-w-4xl mx-auto space-y-4">
-        <h1 className="text-xl font-semibold">My Team</h1>
-        <div className="text-center py-16 text-destructive text-sm">{(error as Error).message || 'Failed to load team'}</div>
+        <PageHeader title="My Team" />
+        <ErrorState title="Failed to load team" description={(error as Error).message} />
       </div>
     )
   }
@@ -49,21 +47,21 @@ export function TeamStatusPage() {
   if (!team) {
     return (
       <div className="max-w-4xl mx-auto space-y-4">
-        <h1 className="text-xl font-semibold">My Team</h1>
-        <div className="text-center py-16 text-muted-foreground">No team is assigned to you.</div>
+        <PageHeader title="My Team" />
+        <EmptyState title="No team is assigned to you." description="A disaster coordinator assigns field teams. Contact your coordinator if you believe this is incorrect." />
       </div>
     )
   }
 
   return (
     <div className="max-w-4xl mx-auto space-y-4">
-      <h1 className="text-xl font-semibold">My Team</h1>
+      <PageHeader title="My Team" />
 
       <Card>
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2 flex-wrap">
             {team.name}
-            <span className={`px-2 py-0.5 rounded-full text-xs ${statusColor(team.status)}`}>{team.status}</span>
+            <StatusBadge status={team.status} />
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -85,12 +83,14 @@ export function TeamStatusPage() {
                 value={team.status}
                 onChange={(e) => statusMutation.mutate(e.target.value)}
                 disabled={statusMutation.isPending}
+                aria-label="Update Status"
                 className="w-full sm:w-48"
                 data-testid="my-team-status"
               >
                 {TEAM_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
               </Select>
               {statusMutation.isPending && <span className="text-xs text-muted-foreground">Saving...</span>}
+              {statusError && <p className="text-xs text-status-error" role="alert">Failed to update status: {statusError}</p>}
             </div>
           </div>
         </CardContent>

@@ -9,6 +9,11 @@ import { incidents } from '../lib/incidents'
 import { useAuth } from '../contexts/AuthContext'
 import { useRealtime } from '../hooks/useRealtime'
 import { useState } from 'react'
+import { PageHeader } from '../components/PageHeader'
+import { StatusBadge } from '../components/StatusBadge'
+import { EmptyState } from '../components/EmptyState'
+import { ErrorState } from '../components/ErrorState'
+import { LoadingState } from '../components/LoadingState'
 
 export function AssignmentsPage() {
   const { user } = useAuth()
@@ -21,10 +26,13 @@ export function AssignmentsPage() {
     queryFn: () => assignments.list(),
   })
 
+  const [actionError, setActionError] = useState('')
+
   const statusMutation = useMutation({
     mutationFn: ({ id, status }: { id: string; status: 'IN_PROGRESS' | 'CANCELLED' | 'COMPLETED' }) =>
       assignments.updateStatus(id, { status }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['assignments'] }),
+    onError: (err: Error) => setActionError(err.message),
   })
 
   const items: AssignmentSummary[] = data?.items ?? []
@@ -46,7 +54,7 @@ export function AssignmentsPage() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Assignments</h1>
+        <PageHeader title="Assignments" className="mb-0" />
         <Button variant="outline" size="sm" onClick={() => refetch()}>Refresh</Button>
       </div>
 
@@ -56,13 +64,15 @@ export function AssignmentsPage() {
         </CardHeader>
         <CardContent>
           {isLoading ? (
-            <div className="text-center py-12 text-muted-foreground" role="status">Loading assignments...</div>
+            <LoadingState label="Loading assignments…" className="justify-center py-12" />
           ) : error ? (
-            <div className="text-center py-12 text-destructive text-sm" role="alert">
-              {(error as Error).message || 'Failed to load assignments'}
-            </div>
+            <ErrorState
+              title="Failed to load assignments"
+              description={(error as Error).message}
+              retry={() => refetch()}
+            />
           ) : items.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground text-sm">No assignments.</div>
+            <EmptyState title="No assignments." description="Assignments created by a coordinator will appear here." />
           ) : (
             <ul className="divide-y" role="list">
               {items.map((a) => (
@@ -71,12 +81,12 @@ export function AssignmentsPage() {
                     <div className="drcip-dense-row-content">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-medium text-sm break-all">{a.id}</span>
-                        <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 text-xs">{a.status}</span>
-                        <Link className="text-xs text-blue-700 underline break-all" to={`/incidents/${a.incident_id}`}>
+                        <StatusBadge status={a.status} />
+                        <Link className="text-xs text-primary hover:underline break-all" to={`/incidents/${a.incident_id}`}>
                           {a.incident_id}
                         </Link>
                         {a.field_team_id && (
-                          <span className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 text-xs break-all">{a.field_team_id}</span>
+                          <span className="px-2 py-0.5 rounded-drcip-md bg-surface-cool font-mono text-xs break-all">{a.field_team_id}</span>
                         )}
                       </div>
                       <p className="text-xs text-muted-foreground mt-1 break-words">
@@ -133,11 +143,12 @@ export function AssignmentsPage() {
           </CardHeader>
           <CardContent className="space-y-3">
             {resolveFeedback && (
-              <div className={`text-sm p-2 rounded ${resolveFeedback.startsWith('Error') ? 'bg-red-50 text-red-800' : 'bg-green-50 text-green-800'}`} role="status">
+              <div className={`text-sm p-2 rounded ${resolveFeedback.startsWith('Error') ? 'bg-status-error/10 text-status-error' : 'bg-status-success/10 text-status-success'}`} role="status">
                 {resolveFeedback}
-                <button className="ml-2 underline text-xs" onClick={() => setResolveFeedback(null)}>dismiss</button>
+                <Button variant="link" size="sm" className="ml-1 h-auto p-0 text-xs underline" onClick={() => setResolveFeedback(null)}>dismiss</Button>
               </div>
             )}
+            {actionError && <p className="text-sm text-status-error" role="alert">Failed to update assignment: {actionError}</p>}
             <div>
               <label className="text-sm font-medium" htmlFor="resolve-incident-id">Incident ID</label>
               <Input id="resolve-incident-id" placeholder="INC-XXXXXXXX" value={resolveIncidentId} onChange={(e) => setResolveIncidentId(e.target.value)} />

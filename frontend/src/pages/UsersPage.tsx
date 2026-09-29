@@ -4,6 +4,13 @@ import { Button } from './ui/button'
 import { Card, CardHeader, CardTitle, CardContent } from './ui/card'
 import { Input } from './ui/input'
 import { Select } from './ui/select'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog'
+import { StatusBadge } from '../components/StatusBadge'
+import { PageHeader } from '../components/PageHeader'
+import { EmptyState } from '../components/EmptyState'
+import { ErrorState } from '../components/ErrorState'
+import { LoadingState } from '../components/LoadingState'
+import { ConfirmDialog } from '../components/ConfirmDialog'
 import { users, canManageUsers, type User, type CreateUserRequest, type UpdateUserRequest } from '../lib/users'
 import { useAuth } from '../contexts/AuthContext'
 
@@ -108,15 +115,23 @@ export function UsersPage() {
   }
 
   if (!canManageUsers(user?.role)) {
-    return <div className="text-sm text-muted-foreground">Cannot manage users.</div>
+    return (
+      <div>
+        <PageHeader title="User Management" />
+        <p className="text-sm text-muted-foreground" role="alert">Cannot manage users.</p>
+      </div>
+    )
   }
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">User Management</h1>
-        <Button size="sm" onClick={openCreate} data-testid="create-user">Provision User</Button>
-      </div>
+      <PageHeader
+        title="User Management"
+        description="Provision, edit, and activate accounts."
+        actions={
+          <Button size="sm" onClick={openCreate} data-testid="create-user">Provision User</Button>
+        }
+      />
 
       <Card>
         <CardHeader>
@@ -124,12 +139,12 @@ export function UsersPage() {
         </CardHeader>
         <CardContent>
           <div className="drcip-filter-group">
-            <Input placeholder="Search name or email" className="sm:w-56" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1) }} data-testid="user-search" />
-            <Select value={roleFilter} onChange={(e) => { setRoleFilter(e.target.value); setPage(1) }} className="sm:w-48" data-testid="user-role-filter">
+            <Input aria-label="Search name or email" placeholder="Search name or email" className="sm:w-56" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1) }} data-testid="user-search" />
+            <Select aria-label="Filter by role" value={roleFilter} onChange={(e) => { setRoleFilter(e.target.value); setPage(1) }} className="sm:w-48" data-testid="user-role-filter">
               <option value="">All roles</option>
               {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
             </Select>
-            <Select value={activeFilter} onChange={(e) => { setActiveFilter(e.target.value); setPage(1) }} className="sm:w-40" data-testid="user-active-filter">
+            <Select aria-label="Filter by account status" value={activeFilter} onChange={(e) => { setActiveFilter(e.target.value); setPage(1) }} className="sm:w-40" data-testid="user-active-filter">
               <option value="">All statuses</option>
               <option value="true">Active</option>
               <option value="false">Inactive</option>
@@ -146,11 +161,15 @@ export function UsersPage() {
       )}
 
       {isLoading ? (
-        <div className="text-center py-16 text-muted-foreground" role="status">Loading users...</div>
+        <LoadingState label="Loading users…" className="justify-center py-16" />
       ) : error ? (
-        <div className="text-center py-16 text-destructive text-sm">{(error as Error).message || 'Failed to load users'}</div>
+        <ErrorState
+          title="Failed to load users"
+          description={(error as Error).message}
+          retry={() => refetch()}
+        />
       ) : !data?.items.length ? (
-        <div className="text-center py-16 text-muted-foreground">No users found.</div>
+        <EmptyState title="No users found." description="No accounts match the current filters." />
       ) : (
         <Card>
           <CardContent className="space-y-3">
@@ -159,9 +178,7 @@ export function UsersPage() {
                 <div className="drcip-dense-row-content">
                   <div className="flex items-center gap-2">
                     <span className="font-medium truncate">{u.name}</span>
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${u.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`} data-testid="user-status">
-                      {u.is_active ? 'ACTIVE' : 'INACTIVE'}
-                    </span>
+                    <StatusBadge status={u.is_active} />
                   </div>
                   <div className="text-xs text-muted-foreground truncate">{u.email}</div>
                   <div className="text-xs text-muted-foreground">Role: {u.role}</div>
@@ -169,7 +186,12 @@ export function UsersPage() {
                 <div className="drcip-dense-row-actions">
                   <Button variant="outline" size="sm" onClick={() => openEdit(u)} data-testid="edit-user">Edit</Button>
                   {u.is_active
-                    ? <Button variant="outline" size="sm" onClick={() => deactivateMutation.mutate(u.id)} data-testid="deactivate-user">Deactivate</Button>
+                    ? <ConfirmDialog
+                        trigger={<Button variant="outline" size="sm" data-testid="deactivate-user">Deactivate</Button>}
+                        title={`Deactivate ${u.name}?`}
+                        description="This will prevent the user from signing in. You can reactivate later."
+                        onConfirm={() => deactivateMutation.mutate(u.id)}
+                      />
                     : <Button variant="outline" size="sm" onClick={() => activateMutation.mutate(u.id)} data-testid="activate-user">Activate</Button>}
                 </div>
               </div>
@@ -188,39 +210,39 @@ export function UsersPage() {
         </div>
       )}
 
-      {formOpen && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setFormOpen(false)}>
-          <div className="bg-white rounded-lg p-6 w-full max-w-lg shadow-lg" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-lg font-semibold mb-4">{editing ? `Edit ${editing.name}` : 'Provision User'}</h2>
-            {formError && <div className="mb-3 p-2 rounded bg-red-50 text-red-700 text-sm" role="alert">{formError}</div>}
-            <form onSubmit={handleSubmit} className="space-y-3">
-              <div>
-                <label className="block text-sm font-medium mb-1">Name</label>
-                <Input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Full name" data-testid="form-name" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Email</label>
-                <Input required type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="user@example.com" disabled={!!editing} data-testid="form-email" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Role</label>
-                <Select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} data-testid="form-role">
-                  {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
-                </Select>
-              </div>
-              {!editing && (
-                <p className="text-xs text-muted-foreground">New accounts use the system default password until changed.</p>
-              )}
-              <div className="flex justify-end gap-2 pt-2">
-                <Button type="button" variant="ghost" onClick={() => setFormOpen(false)}>Cancel</Button>
-                <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending} data-testid="form-submit">
-                  {editing ? 'Save Changes' : 'Create User'}
-                </Button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <Dialog open={formOpen} onOpenChange={setFormOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editing ? `Edit ${editing.name}` : 'Provision User'}</DialogTitle>
+          </DialogHeader>
+          {formError && <div className="p-2 rounded bg-destructive/10 text-destructive text-sm" role="alert">{formError}</div>}
+          <form onSubmit={handleSubmit} className="space-y-3">
+            <div>
+              <label htmlFor="user-form-name" className="block text-sm font-medium mb-1">Name</label>
+              <Input id="user-form-name" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Full name" data-testid="form-name" />
+            </div>
+            <div>
+              <label htmlFor="user-form-email" className="block text-sm font-medium mb-1">Email</label>
+              <Input id="user-form-email" required type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="user@example.com" disabled={!!editing} data-testid="form-email" />
+            </div>
+            <div>
+              <label htmlFor="user-form-role" className="block text-sm font-medium mb-1">Role</label>
+              <Select id="user-form-role" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} data-testid="form-role">
+                {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+              </Select>
+            </div>
+            {!editing && (
+              <p className="text-xs text-muted-foreground">New accounts use the system default password until changed.</p>
+            )}
+            <div className="flex justify-end gap-2 pt-2">
+              <Button type="button" variant="ghost" onClick={() => setFormOpen(false)}>Cancel</Button>
+              <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending} data-testid="form-submit">
+                {editing ? 'Save Changes' : 'Create User'}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

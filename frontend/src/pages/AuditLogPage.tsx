@@ -4,9 +4,14 @@ import { Button } from './ui/button'
 import { Card, CardHeader, CardTitle, CardContent } from './ui/card'
 import { Input } from './ui/input'
 import { Select } from './ui/select'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog'
 import { AUDIT_ACTIONS } from '@drcip/contracts'
 import { auditLogs, canViewAuditLogs, type AuditLogDetail } from '../lib/audit'
 import { useAuth } from '../contexts/AuthContext'
+import { PageHeader } from '../components/PageHeader'
+import { EmptyState } from '../components/EmptyState'
+import { ErrorState } from '../components/ErrorState'
+import { LoadingState } from '../components/LoadingState'
 
 const PAGE_SIZE = 20
 const AUDIT_ACTION_VALUES = Object.keys(AUDIT_ACTIONS)
@@ -62,12 +67,17 @@ export function AuditLogPage() {
   }
 
   if (!canViewAuditLogs(user?.role)) {
-    return <div className="text-sm text-muted-foreground">Cannot view audit logs.</div>
+    return (
+      <div>
+        <PageHeader title="Audit Log Viewer" />
+        <p className="text-sm text-muted-foreground" role="alert">Cannot view audit logs.</p>
+      </div>
+    )
   }
 
   return (
     <div className="space-y-4">
-      <h1 className="text-xl font-semibold">Audit Log Viewer</h1>
+      <PageHeader title="Audit Log Viewer" />
 
       <Card>
         <CardHeader>
@@ -75,25 +85,29 @@ export function AuditLogPage() {
         </CardHeader>
         <CardContent>
           <div className="drcip-filter-group">
-            <Input placeholder="Search action / entity" className="sm:w-56" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1) }} data-testid="audit-search" />
-            <Select value={actionFilter} onChange={(e) => { setActionFilter(e.target.value); setPage(1) }} className="sm:w-56" data-testid="audit-action-filter">
+            <Input aria-label="Search audit log" placeholder="Search action / entity" className="sm:w-56" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1) }} data-testid="audit-search" />
+            <Select aria-label="Filter by action" value={actionFilter} onChange={(e) => { setActionFilter(e.target.value); setPage(1) }} className="sm:w-56" data-testid="audit-action-filter">
               <option value="">All actions</option>
               {AUDIT_ACTION_VALUES.map((a) => <option key={a} value={a}>{a}</option>)}
             </Select>
-            <Input placeholder="Entity type" className="sm:w-40" value={entityType} onChange={(e) => { setEntityType(e.target.value); setPage(1) }} data-testid="audit-entity-filter" />
-            <Input type="datetime-local" className="sm:w-52" value={from} onChange={(e) => { setFrom(e.target.value); setPage(1) }} data-testid="audit-from" />
-            <Input type="datetime-local" className="sm:w-52" value={to} onChange={(e) => { setTo(e.target.value); setPage(1) }} data-testid="audit-to" />
+            <Input aria-label="Filter by entity type" placeholder="Entity type" className="sm:w-40" value={entityType} onChange={(e) => { setEntityType(e.target.value); setPage(1) }} data-testid="audit-entity-filter" />
+            <Input aria-label="From date" type="datetime-local" className="sm:w-52" value={from} onChange={(e) => { setFrom(e.target.value); setPage(1) }} data-testid="audit-from" />
+            <Input aria-label="To date" type="datetime-local" className="sm:w-52" value={to} onChange={(e) => { setTo(e.target.value); setPage(1) }} data-testid="audit-to" />
             <Button variant="ghost" size="sm" onClick={() => { setSearch(''); setActionFilter(''); setEntityType(''); setFrom(''); setTo(''); setPage(1) }}>Clear filters</Button>
           </div>
         </CardContent>
       </Card>
 
       {isLoading ? (
-        <div className="text-center py-16 text-muted-foreground" role="status">Loading audit logs...</div>
+        <LoadingState label="Loading audit logs…" className="justify-center py-16" />
       ) : error ? (
-        <div className="text-center py-16 text-destructive text-sm">{(error as Error).message || 'Failed to load audit logs'}</div>
+        <ErrorState
+          title="Failed to load audit logs"
+          description={(error as Error).message}
+          retry={() => refetch()}
+        />
       ) : !data?.items.length ? (
-        <div className="text-center py-16 text-muted-foreground">No audit records found.</div>
+        <EmptyState title="No audit records found." description="No entries match the current filters." />
       ) : (
         <Card>
           <CardContent className="space-y-2">
@@ -101,7 +115,7 @@ export function AuditLogPage() {
               <div key={l.id} className="drcip-dense-row border-b pb-2 last:border-b-0">
                 <div className="drcip-dense-row-content">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">{l.action}</span>
+                    <span className="text-xs px-2 py-0.5 rounded-drcip-md bg-status-info/10 text-status-info font-medium">{l.action}</span>
                     <span className="text-xs text-muted-foreground">{l.entity_type}{l.entity_id ? ` · ${String(l.entity_id).slice(0, 12)}` : ''}</span>
                   </div>
                   <div className="text-xs text-muted-foreground mt-1 break-words">
@@ -127,38 +141,38 @@ export function AuditLogPage() {
         </div>
       )}
 
-      {(detail || detailLoading || detailError) && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => { setDetail(null); setDetailError('') }}>
-          <div className="bg-white rounded-lg p-6 w-full max-w-lg shadow-lg" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-lg font-semibold mb-4">Audit Detail</h2>
-            {detailLoading && <div className="text-sm text-muted-foreground" role="status">Loading...</div>}
-            {detailError && <div className="mb-3 p-2 rounded bg-red-50 text-red-700 text-sm" role="alert">{detailError}</div>}
-            {detail && (
-              <div className="space-y-2 text-sm">
-                <p><span className="font-medium">Action:</span> {detail.action}</p>
-                <p><span className="font-medium">Entity:</span> {detail.entity_type}{detail.entity_id ? ` (${detail.entity_id})` : ''}</p>
-                <p><span className="font-medium">Actor:</span> {detail.actor_name ?? 'System'}{detail.actor_email ? ` (${detail.actor_email})` : ''}</p>
-                <p><span className="font-medium">Occurred:</span> {new Date(detail.occurred_at).toLocaleString()}</p>
-                {detail.before_state && Object.keys(detail.before_state).length > 0 && (
-                  <div>
-                    <p className="font-medium">Before:</p>
-                    <pre className="text-xs bg-gray-50 p-2 rounded overflow-x-auto">{JSON.stringify(detail.before_state, null, 2)}</pre>
-                  </div>
-                )}
-                {detail.after_state && Object.keys(detail.after_state).length > 0 && (
-                  <div>
-                    <p className="font-medium">After:</p>
-                    <pre className="text-xs bg-gray-50 p-2 rounded overflow-x-auto">{JSON.stringify(detail.after_state, null, 2)}</pre>
-                  </div>
-                )}
-              </div>
-            )}
-            <div className="flex justify-end pt-4">
-              <Button variant="ghost" onClick={() => { setDetail(null); setDetailError('') }}>Close</Button>
+      <Dialog open={!!detail || detailLoading || !!detailError} onOpenChange={(open) => { if (!open) { setDetail(null); setDetailError('') } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Audit Detail</DialogTitle>
+          </DialogHeader>
+          {detailLoading && <div className="text-sm text-muted-foreground" role="status">Loading…</div>}
+          {detailError && <div className="p-2 rounded bg-destructive/10 text-destructive text-sm" role="alert">{detailError}</div>}
+          {detail && (
+            <div className="space-y-2 text-sm">
+              <p><span className="font-medium">Action:</span> {detail.action}</p>
+              <p><span className="font-medium">Entity:</span> {detail.entity_type}{detail.entity_id ? ` (${detail.entity_id})` : ''}</p>
+              <p><span className="font-medium">Actor:</span> {detail.actor_name ?? 'System'}{detail.actor_email ? ` (${detail.actor_email})` : ''}</p>
+              <p><span className="font-medium">Occurred:</span> {new Date(detail.occurred_at).toLocaleString()}</p>
+              {detail.before_state && Object.keys(detail.before_state).length > 0 && (
+                <div>
+                  <p className="font-medium">Before:</p>
+                  <pre className="text-xs bg-surface-cool p-2 rounded overflow-x-auto">{JSON.stringify(detail.before_state, null, 2)}</pre>
+                </div>
+              )}
+              {detail.after_state && Object.keys(detail.after_state).length > 0 && (
+                <div>
+                  <p className="font-medium">After:</p>
+                  <pre className="text-xs bg-surface-cool p-2 rounded overflow-x-auto">{JSON.stringify(detail.after_state, null, 2)}</pre>
+                </div>
+              )}
             </div>
+          )}
+          <div className="flex justify-end pt-4">
+            <Button variant="ghost" onClick={() => { setDetail(null); setDetailError('') }}>Close</Button>
           </div>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

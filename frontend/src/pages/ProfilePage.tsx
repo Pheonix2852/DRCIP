@@ -4,6 +4,9 @@ import api from '../lib/api'
 import { Card, CardHeader, CardTitle, CardContent } from './ui/card'
 import { Input } from './ui/input'
 import { Button } from './ui/button'
+import { PageHeader } from '../components/PageHeader'
+import { LoadingState } from '../components/LoadingState'
+import { ErrorState } from '../components/ErrorState'
 
 interface UserProfile {
   id: string
@@ -21,7 +24,7 @@ export function ProfilePage() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [pwFeedback, setPwFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
 
-  const { data: profile, isLoading } = useQuery({
+  const { data: profile, isLoading, error } = useQuery({
     queryKey: ['me'],
     queryFn: async () => {
       const res = await api.get<{ success: boolean; data: UserProfile }>('/api/v1/me')
@@ -62,38 +65,50 @@ export function ProfilePage() {
   if (isLoading) {
     return (
       <div className="max-w-2xl mx-auto space-y-4">
-        <h1 className="text-xl font-semibold">Profile</h1>
-        <div className="text-center py-16 text-muted-foreground" role="status">Loading profile...</div>
+        <PageHeader title="Profile" />
+        <LoadingState label="Loading profile…" className="justify-center py-16" />
       </div>
     )
   }
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
-      <h1 className="text-xl font-semibold">Profile</h1>
+      <PageHeader title="Profile" />
 
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Account Information</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          {profile && (
-            <dl className="grid grid-cols-2 gap-3 text-sm">
-              <dt className="text-muted-foreground">Name</dt>
-              <dd className="font-medium">{profile.name}</dd>
-              <dt className="text-muted-foreground">Email</dt>
-              <dd className="font-medium">{profile.email}</dd>
-              <dt className="text-muted-foreground">Role</dt>
-              <dd className="font-medium">{profile.role}</dd>
-              <dt className="text-muted-foreground">Status</dt>
-              <dd className="font-medium">{profile.is_active ? 'Active' : 'Inactive'}</dd>
-              <dt className="text-muted-foreground">Member Since</dt>
-              <dd className="font-medium">{new Date(profile.created_at).toLocaleDateString()}</dd>
+          {error ? (
+            <ErrorState title="Failed to load profile" description={(error as Error).message} />
+          ) : profile && (
+            <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+              <div className="flex flex-col sm:contents min-w-0">
+                <dt className="text-muted-foreground">Name</dt>
+                <dd className="font-medium break-words min-w-0">{profile.name}</dd>
+              </div>
+              <div className="flex flex-col sm:contents min-w-0">
+                <dt className="text-muted-foreground">Email</dt>
+                <dd className="font-medium break-words min-w-0">{profile.email}</dd>
+              </div>
+              <div className="flex flex-col sm:contents min-w-0">
+                <dt className="text-muted-foreground">Role</dt>
+                <dd className="font-medium break-words min-w-0">{profile.role}</dd>
+              </div>
+              <div className="flex flex-col sm:contents min-w-0">
+                <dt className="text-muted-foreground">Status</dt>
+                <dd className="font-medium break-words min-w-0">{profile.is_active ? 'Active' : 'Inactive'}</dd>
+              </div>
+              <div className="flex flex-col sm:contents min-w-0">
+                <dt className="text-muted-foreground">Member Since</dt>
+                <dd className="font-medium break-words min-w-0">{new Date(profile.created_at).toLocaleDateString()}</dd>
+              </div>
               {profile.last_login_at && (
-                <>
+                <div className="flex flex-col sm:contents min-w-0">
                   <dt className="text-muted-foreground">Last Login</dt>
-                  <dd className="font-medium">{new Date(profile.last_login_at).toLocaleString()}</dd>
-                </>
+                  <dd className="font-medium break-words min-w-0">{new Date(profile.last_login_at).toLocaleString()}</dd>
+                </div>
               )}
             </dl>
           )}
@@ -122,7 +137,7 @@ export function ProfilePage() {
             {pwFeedback && (
               <div
                 role="status"
-                className={`text-sm p-2 rounded ${pwFeedback.type === 'error' ? 'bg-red-50 text-red-800' : 'bg-green-50 text-green-800'}`}
+                className={`text-sm p-2 rounded ${pwFeedback.type === 'error' ? 'bg-status-error/10 text-status-error' : 'bg-status-success/10 text-status-success'}`}
               >
                 {pwFeedback.message}
               </div>

@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { Card, CardHeader, CardTitle, CardContent } from '../pages/ui/card'
+import { Button } from '../pages/ui/button'
 import { weather, weatherIcon } from '../lib/weather'
 
 interface WeatherPanelProps {
@@ -33,7 +34,7 @@ export function WeatherPanel({ latitude, longitude }: WeatherPanelProps) {
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0">
         <CardTitle className="text-base">Weather Context</CardTitle>
-        <button className="text-xs text-primary hover:underline" onClick={() => refetch()} disabled={isLoading}>Refresh</button>
+        <Button variant="link" size="sm" className="h-auto px-0 text-xs text-primary" onClick={() => refetch()} disabled={isLoading}>Refresh</Button>
       </CardHeader>
       <CardContent>
         {isLoading ? (
@@ -41,12 +42,12 @@ export function WeatherPanel({ latitude, longitude }: WeatherPanelProps) {
         ) : error ? (
           <div className="text-sm text-destructive" role="alert">Weather is currently unavailable.</div>
         ) : !data || data.status === 'UNAVAILABLE' ? (
-          <div className="text-sm px-3 py-2 rounded bg-red-50 text-red-800" role="status">
+          <div className="text-sm px-3 py-2 rounded bg-status-unavailable/10 text-status-unavailable" role="status">
             Weather is unavailable.
           </div>
         ) : data.status === 'STALE' ? (
           <>
-            <div className="text-sm px-3 py-2 rounded bg-amber-50 text-amber-800 mb-2" role="status">
+            <div className="text-sm px-3 py-2 rounded bg-status-warning/10 text-status-warning mb-2" role="status">
               Weather data is stale. Last updated {data.observed_at ? new Date(data.observed_at).toLocaleString() : 'unknown'}.
             </div>
             <WeatherDetails data={data} />

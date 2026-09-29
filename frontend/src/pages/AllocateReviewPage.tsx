@@ -2,12 +2,14 @@ import { useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Button } from './ui/button'
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from './ui/card'
+import { Card, CardHeader, CardDescription, CardContent } from './ui/card'
 import { Input } from './ui/input'
 import { Select } from './ui/select'
 import { Textarea } from './ui/textarea'
 import { incidents } from '../lib/incidents'
 import { assignments, type CreateAssignmentItem, type CreateResourceItem, type CreateShelterItem, type CreateTeamItem } from '../lib/assignments'
+import { ErrorState } from '../components/ErrorState'
+import { LoadingState } from '../components/LoadingState'
 
 const RESOURCE_TYPES = ['AMBULANCE', 'RESCUE_TEAM', 'FOOD', 'MEDICAL_KIT', 'VEHICLE', 'RELIEF_TRUCK', 'SHELTER', 'VOLUNTEER', 'PERSONNEL']
 const KINDS = [
@@ -93,17 +95,17 @@ export function AllocateReviewPage() {
   }
 
   if (isLoading) {
-    return <div className="text-center py-16 text-muted-foreground" role="status">Loading incident...</div>
+    return <LoadingState label="Loading incident…" className="justify-center py-16" />
   }
   if (error) {
-    return <div className="text-center py-16 text-destructive" role="alert">{(error as Error).message || 'Failed to load incident'}</div>
+    return <ErrorState title="Failed to load incident" description={(error as Error).message} />
   }
 
   return (
     <div className="max-w-3xl mx-auto space-y-4">
       <Card>
         <CardHeader>
-          <CardTitle>Manual Assignment</CardTitle>
+          <h1 className="text-2xl font-semibold leading-none tracking-tight">Manual Assignment</h1>
           <CardDescription>
             {incident?.id} &middot; {incident?.disaster_type} &middot; {incident?.status}
           </CardDescription>
@@ -111,7 +113,7 @@ export function AllocateReviewPage() {
         <CardContent className="space-y-4">
           {createdId ? (
             <div className="space-y-3">
-              <div className="p-3 rounded-md bg-green-50 text-green-800 text-sm" role="status">
+              <div className="p-3 rounded-md bg-status-success/10 text-status-success text-sm" role="status">
                 Assignment {createdId} created.
               </div>
               <div className="flex gap-2">
@@ -129,7 +131,7 @@ export function AllocateReviewPage() {
                     <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 items-end">
                       <div>
                         <label className="block text-xs font-medium mb-1">Item type</label>
-                        <Select data-testid={`kind-${index}`} value={row.kind} onChange={(e) => updateRow(index, { kind: e.target.value as ItemKind })}>
+                        <Select data-testid={`kind-${index}`} aria-label={`Item type ${index + 1}`} value={row.kind} onChange={(e) => updateRow(index, { kind: e.target.value as ItemKind })}>
                           {KINDS.map((k) => <option key={k.value} value={k.value}>{k.label}</option>)}
                         </Select>
                       </div>
@@ -137,7 +139,7 @@ export function AllocateReviewPage() {
                       {row.kind === 'resource' && (
                         <div>
                           <label className="block text-xs font-medium mb-1">Resource type</label>
-                          <Select value={row.resource_type} onChange={(e) => updateRow(index, { resource_type: e.target.value })}>
+                          <Select aria-label={`Resource type ${index + 1}`} value={row.resource_type} onChange={(e) => updateRow(index, { resource_type: e.target.value })}>
                             {RESOURCE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
                           </Select>
                         </div>
@@ -148,6 +150,7 @@ export function AllocateReviewPage() {
                           {row.kind === 'resource' ? 'Resource id' : row.kind === 'team' ? 'Team id' : 'Shelter id'}
                         </label>
                         <Input
+                          aria-label={`${row.kind === 'resource' ? 'Resource id' : row.kind === 'team' ? 'Team id' : 'Shelter id'} ${index + 1}`}
                           placeholder={row.kind === 'resource' ? 'RES-...' : row.kind === 'team' ? 'TEAM-...' : 'SHL-...'}
                           data-testid={`ref-${index}`}
                           value={row.ref}
@@ -163,7 +166,7 @@ export function AllocateReviewPage() {
                               1
                             </div>
                           ) : (
-                            <Input type="number" min="1" step={row.kind === 'shelter' ? '1' : 'any'} data-testid={`qty-${index}`} value={row.quantity} onChange={(e) => updateRow(index, { quantity: e.target.value })} />
+                            <Input type="number" min="1" step={row.kind === 'shelter' ? '1' : 'any'} aria-label={`Quantity ${index + 1}`} data-testid={`qty-${index}`} value={row.quantity} onChange={(e) => updateRow(index, { quantity: e.target.value })} />
                           )}
                         </div>
                         <Button
@@ -186,8 +189,8 @@ export function AllocateReviewPage() {
               </Button>
 
               <div>
-                <label className="block text-sm font-medium mb-1">Notes (optional)</label>
-                <Textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Decision reason..." />
+                <label htmlFor="allocate-notes" className="block text-sm font-medium mb-1">Notes (optional)</label>
+                <Textarea id="allocate-notes" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Decision reason..." />
               </div>
 
               <div className="flex gap-2">

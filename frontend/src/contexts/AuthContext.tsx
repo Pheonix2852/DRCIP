@@ -8,7 +8,7 @@ export type WsStatus = 'connecting' | 'open' | 'closed' | 'reconnecting'
 interface AuthContextType {
   user: User | null
   token: string | null
-  login: (credentials: LoginRequest) => Promise<void>
+  login: (credentials: LoginRequest) => Promise<User>
   logout: () => Promise<void>
   isAuthenticated: boolean
   isInitialized: boolean
@@ -35,7 +35,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(null)
   const [isInitialized, setIsInitialized] = useState(false)
   const [ws, setWs] = useState<WebSocket | null>(null)
-  const [wsStatus, setWsStatus] = useState<WsStatus>('closed')
+  const [wsStatus, setWsStatus] = useState<WsStatus>('connecting')
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const reconnectDelay = useRef(INITIAL_RECONNECT_DELAY)
   const mountedRef = useRef(true)
@@ -142,6 +142,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setToken(access_token)
     setUser(fullUser)
     localStorage.setItem('drcip-auth', JSON.stringify({ token: access_token, user: fullUser }))
+    return fullUser
   }
 
   const logout = async () => {

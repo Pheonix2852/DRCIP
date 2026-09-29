@@ -164,6 +164,9 @@ describe('Phase 6 — deactivate error feedback', () => {
     const deactivateButton = await screen.findByTestId('deactivate-user')
     fireEvent.click(deactivateButton)
 
+    const confirmButton = await screen.findByRole('button', { name: 'Confirm' })
+    fireEvent.click(confirmButton)
+
     const alert = await screen.findByRole('alert')
     expect(alert).toHaveTextContent('Cannot deactivate the last active Administrator')
   })
@@ -189,6 +192,9 @@ describe('Phase 6 — deactivate error feedback', () => {
 
     const deactivateButton = await screen.findByTestId('deactivate-user')
     fireEvent.click(deactivateButton)
+
+    const confirmButton = await screen.findByRole('button', { name: 'Confirm' })
+    fireEvent.click(confirmButton)
 
     const alert = await screen.findByRole('alert')
     expect(alert).toHaveTextContent('You cannot deactivate your own account')

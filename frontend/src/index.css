@@ -103,6 +103,23 @@
   --status-error: #B42318;
   --status-unavailable: #667085;
 
+  /* --- Chart Colors (derived from semantic tokens) --- */
+  --chart-status-reported: var(--status-info);
+  --chart-status-triage: var(--status-warning);
+  --chart-status-in-response: var(--status-error);
+  --chart-status-resolved: var(--status-success);
+
+  --chart-severity-low: var(--severity-low);
+  --chart-severity-medium: var(--severity-medium);
+  --chart-severity-high: var(--severity-high);
+  --chart-severity-critical: var(--severity-critical);
+
+  --chart-resource-available: var(--status-success);
+  --chart-resource-assigned: var(--status-warning);
+  --chart-resource-deployed: var(--status-error);
+  --chart-resource-unavailable: var(--status-unavailable);
+  --chart-resource-maintenance: var(--status-warning);
+
   /* --- Channel encodings of the tokens above ---
      Used by Tailwind alpha utilities (bg-primary/90, hover:bg-destructive/90
      etc.) via `rgb(var(--X-rgb) / <alpha-value>). Mechanical derivations of

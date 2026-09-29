@@ -2,15 +2,19 @@ import { useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { Button } from './ui/button'
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from './ui/card'
+import { Card, CardContent } from './ui/card'
 import { Label } from './ui/label'
 import { Select } from './ui/select'
 import { Textarea } from './ui/textarea'
 import { incidents } from '../lib/incidents'
-import { severityColor } from '../lib/severityColor'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { MapPanel } from '../components/MapPanel'
 import { useRealtime } from '../hooks/useRealtime'
+import { PageHeader } from '../components/PageHeader'
+import { StatusBadge } from '../components/StatusBadge'
+import { SeverityBadge } from '../components/SeverityBadge'
+import { ErrorState } from '../components/ErrorState'
+import { LoadingState } from '../components/LoadingState'
 import type { SeverityLevel } from '@drcip/contracts'
 
 export function IncidentDetailsPage() {
@@ -59,18 +63,16 @@ export function IncidentDetailsPage() {
   }
 
   if (isLoading) {
-    return <div className="text-center py-16 text-muted-foreground" role="status">Loading incident...</div>
+    return <LoadingState label="Loading incident…" className="justify-center py-16" />
   }
 
   if (error) {
-    return (
-      <div className="text-center py-16 text-destructive" role="alert">
-        {(error as Error).message || 'Failed to load incident'}
-      </div>
-    )
+    return <ErrorState title="Failed to load incident" description={(error as Error).message} />
   }
 
-  if (!data) return null
+  if (!data) {
+    return <ErrorState title="Incident not found" description={`No incident matches ${id}. It may have been removed or the link is invalid.`} />
+  }
 
   const incident = data
   const prediction = incident.latest_prediction
@@ -79,30 +81,28 @@ export function IncidentDetailsPage() {
 
   return (
     <div className="max-w-3xl mx-auto space-y-4">
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>{incident.id}</CardTitle>
-              <CardDescription>{incident.disaster_type}</CardDescription>
-            </div>
-            <span className="px-2 py-1 rounded-full bg-blue-100 text-blue-800 text-xs font-medium">{incident.status}</span>
+      <PageHeader
+        title={incident.id}
+        description={incident.disaster_type}
+        actions={<StatusBadge status={incident.status} />}
+      />
+
+      {isCoordinator && (
+        predictionSuccess ? (
+          <div className="flex items-center gap-2 bg-status-success/10 text-status-success rounded-drcip-md px-3 py-2 text-sm" role="status">
+            AI severity prediction: <strong data-testid="predicted-severity">{prediction.severity}</strong>
+            {prediction.confidence && <span> ({(parseFloat(prediction.confidence) * 100).toFixed(0)}% confidence)</span>}
+            <span> — review and confirm via manual triage.</span>
           </div>
-          {isCoordinator && (
-            predictionSuccess ? (
-              <div className="flex items-center gap-2 mt-2 bg-green-50 text-green-800 rounded-md px-3 py-2 text-sm" role="status">
-                AI severity prediction: <strong data-testid="predicted-severity">{prediction.severity}</strong>
-                {prediction.confidence && <span className="text-green-600"> ({(parseFloat(prediction.confidence) * 100).toFixed(0)}% confidence)</span>}
-                <span className="text-green-600"> — review and confirm via manual triage.</span>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2 mt-2 bg-amber-50 text-amber-800 rounded-md px-3 py-2 text-sm" role="status">
-                Severity prediction is temporarily unavailable. You can manually triage this incident.
-              </div>
-            )
-          )}
-        </CardHeader>
-        <CardContent className="space-y-4">
+        ) : (
+          <div className="flex items-center gap-2 bg-status-warning/10 text-status-warning rounded-drcip-md px-3 py-2 text-sm" role="status">
+            Severity prediction is temporarily unavailable. You can manually triage this incident.
+          </div>
+        )
+      )}
+
+      <Card>
+        <CardContent className="space-y-4 pt-4">
           <div>
             <p className="text-sm font-medium text-muted-foreground">Description</p>
             <p>{incident.description}</p>
@@ -126,7 +126,7 @@ export function IncidentDetailsPage() {
                 <p>
                   <span className="text-xs text-muted-foreground mr-1">Confirmed:</span>
                   {incident.confirmed_severity ? (
-                    <span className="px-2 py-0.5 rounded-full text-white text-xs" style={{ backgroundColor: severityColor(incident.confirmed_severity) }}>{incident.confirmed_severity}</span>
+                    <SeverityBadge severity={incident.confirmed_severity} />
                   ) : (
                     <span className="text-muted-foreground text-xs">Not triaged</span>
                   )}
@@ -134,7 +134,7 @@ export function IncidentDetailsPage() {
                 <p>
                   <span className="text-xs text-muted-foreground mr-1">Predicted:</span>
                   {predictionSuccess ? (
-                    <span className="px-2 py-0.5 rounded-full text-white text-xs" style={{ backgroundColor: severityColor(prediction.severity!) }}>{prediction.severity}</span>
+                    <SeverityBadge severity={prediction.severity!} />
                   ) : (
                     <span className="text-muted-foreground text-xs">N/A</span>
                   )}

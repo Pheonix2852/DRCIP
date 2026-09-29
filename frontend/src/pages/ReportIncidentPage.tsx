@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { Button } from './ui/button'
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from './ui/card'
+import { Card, CardHeader, CardDescription, CardContent } from './ui/card'
 import { Input } from './ui/input'
 import { Label } from './ui/label'
 import { Textarea } from './ui/textarea'
@@ -229,12 +229,12 @@ export function ReportIncidentPage() {
     <div className="max-w-2xl mx-auto">
       <Card>
         <CardHeader>
-          <CardTitle>Report Incident</CardTitle>
+          <h1 className="text-2xl font-semibold leading-none tracking-tight">Report Incident</h1>
           <CardDescription>Submit a disaster report. Required fields are marked with *.</CardDescription>
         </CardHeader>
         <CardContent>
-          {error && <div className="mb-4 p-3 rounded-md bg-destructive/10 text-destructive text-sm">{error}</div>}
-          {success && <div className="mb-4 p-3 rounded-md bg-green-100 text-green-800 text-sm">{success}</div>}
+          {error && <div className="mb-4 p-3 rounded-md bg-destructive/10 text-destructive text-sm" role="alert">{error}</div>}
+          {success && <div className="mb-4 p-3 rounded-md bg-status-success/10 text-status-success text-sm" role="status">{success}</div>}
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="disaster_type">Disaster Type *</Label>
@@ -269,7 +269,7 @@ export function ReportIncidentPage() {
                   </span>
                 )}
               </div>
-              {geoError && <p className="text-sm text-amber-600 mt-1">{geoError}</p>}
+              {geoError && <p className="text-sm text-status-warning mt-1" role="alert">{geoError}</p>}
 
               <MapPanel
                 center={mapCenter}
@@ -313,11 +313,11 @@ export function ReportIncidentPage() {
                         <p className="truncate font-medium" title={item.file.name}>{item.file.name}</p>
                         <p className="text-muted-foreground">{(item.file.size / 1024 / 1024).toFixed(1)} MB{item.duration ? ` \u00B7 ${Math.round(item.duration)}s` : ''}</p>
                         {item.status === 'uploading' && <p className="text-muted-foreground">Uploading...</p>}
-                        {item.status === 'done' && <p className="text-green-700">Uploaded</p>}
+                        {item.status === 'done' && <p className="text-status-success">Uploaded</p>}
                         {item.status === 'error' && <p className="text-destructive">Failed: {item.error}</p>}
                       </div>
                       {item.status !== 'uploading' && item.status !== 'done' && (
-                        <button type="button" onClick={() => removeItem(item.key)} aria-label={`Remove ${item.file.name}`} className="absolute top-1 right-1 h-6 w-6 rounded-full bg-black/60 text-white text-sm leading-none">&times;</button>
+                        <button type="button" onClick={() => removeItem(item.key)} aria-label={`Remove ${item.file.name}`} className="absolute top-1 right-1 h-8 w-8 rounded-full bg-black/60 text-white text-base leading-none">&times;</button>
                       )}
                     </div>
                   ))}

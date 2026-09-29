@@ -5,6 +5,10 @@ import { Card, CardHeader, CardTitle, CardContent } from './ui/card'
 import { Select } from './ui/select'
 import { Textarea } from './ui/textarea'
 import { assignments } from '../lib/assignments'
+import { PageHeader } from '../components/PageHeader'
+import { EmptyState } from '../components/EmptyState'
+import { LoadingState } from '../components/LoadingState'
+import { ErrorState } from '../components/ErrorState'
 
 const FIELD_EVENT_TYPES = ['EN_ROUTE', 'ARRIVED', 'IN_PROGRESS', 'COMPLETED', 'BLOCKED']
 
@@ -15,7 +19,7 @@ export function FieldUpdatePage() {
   const [notes, setNotes] = useState('')
   const [feedback, setFeedback] = useState<string | null>(null)
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error } = useQuery({
     queryKey: ['assignments'],
     queryFn: () => assignments.myAssignments(),
   })
@@ -35,12 +39,12 @@ export function FieldUpdatePage() {
 
   return (
     <div className="max-w-3xl mx-auto space-y-4">
-      <h1 className="text-xl font-semibold">Field Update</h1>
+      <PageHeader title="Field Update" />
 
       {feedback && (
-        <div className={`text-sm p-2 rounded ${feedback.startsWith('Error') ? 'bg-red-50 text-red-800' : 'bg-green-50 text-green-800'}`} role="status">
+        <div className={`text-sm p-2 rounded ${feedback.startsWith('Error') ? 'bg-status-error/10 text-status-error' : 'bg-status-success/10 text-status-success'}`} role="status">
           {feedback}
-          <button className="ml-2 underline text-xs" onClick={() => setFeedback(null)}>dismiss</button>
+          <Button variant="link" size="sm" className="ml-1 h-auto p-0 text-xs underline" onClick={() => setFeedback(null)}>dismiss</Button>
         </div>
       )}
 
@@ -50,9 +54,11 @@ export function FieldUpdatePage() {
         </CardHeader>
         <CardContent>
           {isLoading ? (
-            <div className="text-center py-8 text-muted-foreground" role="status">Loading...</div>
+            <LoadingState label="Loading assignments…" className="justify-center py-8" />
+          ) : error ? (
+            <ErrorState title="Failed to load assignments" description={(error as Error).message} />
           ) : items.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground text-sm">No active assignments.</div>
+            <EmptyState title="No active assignments." description="Assignments dispatched to your team will appear here." />
           ) : (
             <ul className="divide-y" role="list">
               {items.map((a) => (

@@ -27,25 +27,50 @@ interface MapPanelProps {
   height?: string
 }
 
-function statusIcon(status?: string): string {
+function statusGlyph(status?: string): { label: string; svg: string } {
   switch (status) {
-    case 'REPORTED': return '\u26A0'
-    case 'TRIAGE_PENDING': return '\u23F3'
-    case 'IN_RESPONSE': return '\u2692'
-    case 'RESOLVED': return '\u2714'
-    default: return '\u2022'
+    case 'REPORTED':
+      return {
+        label: 'Reported',
+        svg: '<path d="M12 4 22 20H2z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M12 10v5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="18" r="1.2" fill="currentColor"/>',
+      }
+    case 'TRIAGE_PENDING':
+      return {
+        label: 'Triage pending',
+        svg: '<circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 7.5V12l3.5 2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
+      }
+    case 'IN_RESPONSE':
+      return {
+        label: 'In response',
+        svg: '<path d="M13.2 2 4 14h6l-1.2 8L18 10h-6z" fill="currentColor"/>',
+      }
+    case 'RESOLVED':
+      return {
+        label: 'Resolved',
+        svg: '<path d="M5 12.5 10 17.5 19 6.5" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>',
+      }
+    default:
+      return { label: 'Location', svg: '<circle cx="12" cy="12" r="4.5" fill="currentColor"/>' }
   }
 }
 
-function makeDivIcon(severity?: string, status?: string, isDraggable?: boolean): L.DivIcon {
+function escapeHtml(value: string): string {
+  return value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
+function makeDivIcon(severity?: string, status?: string, label?: string, isDraggable?: boolean): L.DivIcon {
   const color = severityColor(severity)
-  const icon = statusIcon(status)
-  const size = isDraggable ? 'w-8 h-8 text-base' : 'w-6 h-6 text-xs'
+  const { label: glyphLabel, svg } = statusGlyph(status)
+  const a11yLabel = label
+    ? `${label}${severity ? `, severity ${severity}` : ''}, ${glyphLabel}`
+    : `${glyphLabel}${severity ? `, severity ${severity}` : ''}`
+  const glyph = `<svg viewBox="0 0 24 24" class="h-3.5 w-3.5" aria-hidden="true" focusable="false">${svg}</svg>`
+  const size = isDraggable ? 'w-8 h-8' : 'w-6 h-6'
   return L.divIcon({
     className: '',
     iconSize: [isDraggable ? 32 : 24, isDraggable ? 32 : 24],
     iconAnchor: [isDraggable ? 16 : 12, isDraggable ? 32 : 24],
-    html: `<div class="${size} flex items-center justify-center rounded-full border-2 border-white text-white font-bold shadow-lg" style="background:${color}">${icon}</div>`,
+    html: `<div role="img" aria-label="${escapeHtml(a11yLabel)}" class="${size} flex items-center justify-center rounded-full border-2 border-white text-white font-bold shadow-lg" style="background:${color}">${glyph}</div>`,
   })
 }
 
@@ -54,7 +79,11 @@ function makeDraggableIcon(): L.DivIcon {
     className: '',
     iconSize: [32, 32],
     iconAnchor: [16, 32],
-    html: '<div class="w-8 h-8 flex items-center justify-center rounded-full border-2 border-white bg-blue-600 text-white font-bold text-sm shadow-lg cursor-grab" title="Drag to adjust location">\u{1F4CD}</div>',
+    html: '<div role="img" aria-label="Your location, drag to adjust" title="Drag to adjust location" class="w-8 h-8 flex items-center justify-center rounded-full border-2 border-white bg-cobalt-deep text-white shadow-lg cursor-grab">' +
+      '<svg viewBox="0 0 24 24" class="h-4 w-4" aria-hidden="true" focusable="false">' +
+      '<path d="M12 2c3.4 0 6 2.6 6 6 0 4.4-6 12-6 12S6 12.4 6 8c0-3.4 2.6-6 6-6z" fill="currentColor"/>' +
+      '<circle cx="12" cy="8" r="2.2" fill="var(--brand-cobalt-deep)"/></svg>' +
+      '</div>',
   })
 }
 
@@ -80,7 +109,7 @@ export function MapPanel({
   }
 
   return (
-    <div className={`${height} relative z-0 rounded-lg overflow-hidden border`}>
+    <div className={`${height} relative z-0 rounded-lg overflow-hidden border`} role="region" aria-label="Incident Map">
       <MapContainer
         center={center}
         zoom={zoom}
@@ -93,7 +122,7 @@ export function MapPanel({
           <Marker
             key={m.id}
             position={[m.lat, m.lng]}
-            icon={makeDivIcon(m.severity, m.status, false)}
+            icon={makeDivIcon(m.severity, m.status, m.label, false)}
             eventHandlers={m.onClick ? { click: m.onClick } : undefined}
           />
         ))}

@@ -1,5 +1,6 @@
 import { TriangleAlert } from 'lucide-react'
 import { cn } from '../lib/utils'
+import { Button } from '../pages/ui/button'
 
 export interface ErrorStateProps {
   title?: string
@@ -27,13 +28,9 @@ export function ErrorState({
       <p className="text-sm font-medium text-ink">{title}</p>
       {description && <p className="max-w-sm text-sm text-muted">{description}</p>}
       {retry && (
-        <button
-          type="button"
-          onClick={retry}
-          className="mt-2 rounded-drcip-md border border-border bg-surface px-3 py-1.5 text-sm font-medium text-ink transition-colors hover:bg-surface-cool"
-        >
+        <Button variant="outline" size="sm" type="button" onClick={retry} className="mt-2">
           Try again
-        </button>
+        </Button>
       )}
     </div>
   )

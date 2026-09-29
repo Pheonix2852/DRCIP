@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
+import { Link, Outlet, useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Bell, LogOut, Menu, User, X } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
@@ -93,34 +93,35 @@ const NAV_GROUPS: NavGroup[] = [
 
 function NavItemLink({ item, onNavigate }: { item: NavItem; onNavigate?: () => void }) {
   const location = useLocation();
-  const prefixActive = item.activePrefixes?.some((prefix) => location.pathname.startsWith(prefix)) ?? false;
+  // Mirrors react-router NavLink matching (including the end-slash boundary guard),
+  // plus the extra activePrefixes so aria-current tracks the visual active state.
+  const endSlash = item.to !== "/" && item.to.endsWith("/") ? item.to.length - 1 : item.to.length;
+  const matched =
+    location.pathname === item.to ||
+    (!item.end && location.pathname.startsWith(item.to) && location.pathname.charAt(endSlash) === "/");
+  const isActive =
+    matched || (item.activePrefixes?.some((prefix) => location.pathname.startsWith(prefix)) ?? false);
   return (
-    <NavLink
+    <Link
       to={item.to}
-      end={item.end}
       onClick={onNavigate}
-      className={({ isActive }) =>
-        cn(
-          "group relative flex items-center rounded-drcip-md px-3 py-2 text-sm transition-colors",
-          isActive || prefixActive
-            ? "bg-surface font-medium text-ink shadow-drcip-sm"
-            : "text-text-secondary hover:bg-surface-cool hover:text-ink",
-        )
-      }
-    >
-      {({ isActive }) => (
-        <>
-          <span
-            aria-hidden="true"
-            className={cn(
-              "absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-cobalt-deep transition-opacity",
-              isActive || prefixActive ? "opacity-100" : "opacity-0",
-            )}
-          />
-          <span className="truncate">{item.label}</span>
-        </>
+      aria-current={isActive ? "page" : undefined}
+      className={cn(
+        "group relative flex items-center rounded-drcip-md px-3 py-2 text-sm transition-colors",
+        isActive
+          ? "bg-surface font-medium text-ink shadow-drcip-sm"
+          : "text-text-secondary hover:bg-surface-cool hover:text-ink",
       )}
-    </NavLink>
+    >
+      <span
+        aria-hidden="true"
+        className={cn(
+          "absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-cobalt-deep transition-opacity",
+          isActive ? "opacity-100" : "opacity-0",
+        )}
+      />
+      <span className="truncate">{item.label}</span>
+    </Link>
   );
 }
 
@@ -130,7 +131,7 @@ function renderGroups(role: string, onNavigate?: () => void) {
     if (items.length === 0) return null;
     return (
       <div key={group.title}>
-        <p className="px-3 pb-1 pt-5 font-mono text-[11px] uppercase tracking-wider text-muted">{group.title}</p>
+        <p className="px-3 pb-1 pt-5 font-mono text-[11px] uppercase tracking-wider text-text-muted">{group.title}</p>
         <ul className="space-y-0.5">
           {items.map((item) => (
             <li key={item.to}>
@@ -151,7 +152,7 @@ export function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   useRealtime();
 
-  const { data: unread } = useQuery({
+  const { data: unreadData } = useQuery({
     queryKey: ["notifications"],
     enabled: !!user,
     queryFn: () => notifications.list({ unread_only: "true", limit: 1 }),
@@ -161,7 +162,7 @@ export function Layout() {
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
   });
-  const unreadCount = unread?.pagination?.total ?? 0;
+  const unreadCount = unreadData?.pagination?.total ?? 0;
 
   const role = user?.role;
   const roleLabel = role ? (ROLE_LABELS[role] ?? role) : null;
@@ -263,11 +264,11 @@ export function Layout() {
             {user && roleLabel && (
               <div className="border-b border-border px-4 py-3">
                 <p className="text-sm font-medium text-ink">{user.name}</p>
-                <p className="mt-0.5 font-mono text-[11px] uppercase tracking-wider text-muted">{roleLabel}</p>
+                <p className="mt-0.5 font-mono text-[11px] uppercase tracking-wider text-text-muted">{roleLabel}</p>
               </div>
             )}
 
-            <nav aria-label="Primary" className="flex-1 overflow-y-auto px-3 pb-4">
+            <nav aria-label="Mobile navigation" className="flex-1 overflow-y-auto px-3 pb-4">
               <ul className="space-y-0.5 pt-3">
                 <li>
                   <NavItemLink item={{ label: "Home", to: "/", roles: ALL_ROLES, end: true }} onNavigate={() => setSidebarOpen(false)} />

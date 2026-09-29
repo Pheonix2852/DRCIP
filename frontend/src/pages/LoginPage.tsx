@@ -2,10 +2,11 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useAuth } from '../contexts/AuthContext'
+import { ROLE_HOME } from '../lib/auth-constants'
 import { useNavigate, Link } from 'react-router-dom'
 import { Button } from './ui/button'
 import { Input } from './ui/input'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card'
+import { Card, CardContent, CardDescription, CardHeader } from './ui/card'
 import { toast } from 'sonner'
 import { useState } from 'react'
 
@@ -32,9 +33,9 @@ export function LoginPage() {
     try {
       setLoading(true)
       setFormError(null)
-      await login(data)
+      const user = await login(data)
       toast.success('Logged in successfully')
-      navigate('/dashboard')
+      navigate(ROLE_HOME[user.role])
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Invalid email or password'
       const axiosError = err as { response?: { data?: { error?: { message?: string } } } }
@@ -51,7 +52,7 @@ export function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md">
         <CardHeader>
-          <CardTitle>Sign In</CardTitle>
+          <h1 className="text-2xl font-semibold leading-none tracking-tight">Sign In</h1>
           <CardDescription>Enter your credentials to access DRCIP</CardDescription>
         </CardHeader>
         <CardContent>

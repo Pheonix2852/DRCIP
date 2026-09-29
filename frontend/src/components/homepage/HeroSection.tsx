@@ -11,7 +11,6 @@ import { REGION } from './demo-data'
 import { prefersReducedMotion, scrollToSection } from './homeMotion'
 import { bindPointer } from './pointerSync'
 import heroResponse from '../../assets/homepage/hero/drcip-hero-response.webp'
-import convergenceSvg from '../../assets/homepage/spatial/drcip-convergence-paths.svg'
 
 gsap.registerPlugin(useGSAP, SplitText, ScrollTrigger)
 
@@ -175,7 +174,6 @@ export function HeroSection({ start }: { start: boolean }) {
         src={heroResponse}
         alt=""
         aria-hidden="true"
-        fetchPriority="high"
         decoding="async"
         className="hero-plate"
       />

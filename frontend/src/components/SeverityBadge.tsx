@@ -15,6 +15,8 @@ function normalize(severity?: string): string {
 
 export interface SeverityBadgeProps {
   severity?: string
+  /** Optional field name, e.g. `label="Priority"` renders "Priority: HIGH". */
+  label?: string
   className?: string
 }
 
@@ -22,10 +24,10 @@ export interface SeverityBadgeProps {
  * Severity badge — icon + read-only label + DESIGN_SYSTEM severity tone.
  * Meaning is never carried by colour alone.
  */
-export function SeverityBadge({ severity, className }: SeverityBadgeProps) {
+export function SeverityBadge({ severity, label, className }: SeverityBadgeProps) {
   const key = normalize(severity)
   const Icon = SEVERITY_ICON[key] ?? Circle
-  const label = key || 'Unknown'
+  const text = label ? `${label}: ${key || 'Unknown'}` : key || 'Unknown'
   return (
     <span
       className={cn(
@@ -36,7 +38,7 @@ export function SeverityBadge({ severity, className }: SeverityBadgeProps) {
       data-testid="severity-badge"
     >
       <Icon aria-hidden="true" className="h-3.5 w-3.5" />
-      <span>{label}</span>
+      <span>{text}</span>
     </span>
   )
 }

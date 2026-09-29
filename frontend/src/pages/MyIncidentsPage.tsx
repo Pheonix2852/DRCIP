@@ -1,16 +1,23 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Button } from './ui/button'
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from './ui/card'
+import { Card, CardContent } from './ui/card'
 import { Input } from './ui/input'
 import { Select } from './ui/select'
 import { incidents } from '../lib/incidents'
 import { useQuery } from '@tanstack/react-query'
+import { PageHeader } from '../components/PageHeader'
+import { StatusBadge } from '../components/StatusBadge'
+import { SeverityBadge } from '../components/SeverityBadge'
+import { EmptyState } from '../components/EmptyState'
+import { ErrorState } from '../components/ErrorState'
+import { LoadingState } from '../components/LoadingState'
 
 export function MyIncidentsPage() {
   const [page, setPage] = useState(1)
   const [status, setStatus] = useState<string>('')
   const [disaster_type, setDisasterType] = useState<string>('')
+  const [search, setSearch] = useState('')
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['incidents', page, status, disaster_type],
@@ -25,17 +32,26 @@ export function MyIncidentsPage() {
         .then((res) => res),
   })
 
+  const items = data?.items ?? []
+  const filteredItems = search
+    ? items.filter((i) => {
+        const q = search.toLowerCase()
+        return (
+          i.id.toLowerCase().includes(q) ||
+          i.disaster_type.toLowerCase().includes(q) ||
+          i.description.toLowerCase().includes(q)
+        )
+      })
+    : items
+
   return (
     <div className="max-w-4xl mx-auto">
+      <PageHeader title="My Incidents" description="View and track your submitted incident reports." />
       <Card>
-        <CardHeader>
-          <CardTitle>My Incidents</CardTitle>
-          <CardDescription>View and track your submitted incident reports.</CardDescription>
-        </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
             <div className="space-y-2">
-              <Select name="status" value={status} onChange={(e) => setStatus(e.target.value)}>
+              <Select name="status" aria-label="Filter by status" value={status} onChange={(e) => setStatus(e.target.value)}>
                 <option value="">All Statuses</option>
                 <option value="REPORTED">REPORTED</option>
                 <option value="TRIAGE_PENDING">TRIAGE_PENDING</option>
@@ -44,7 +60,7 @@ export function MyIncidentsPage() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Select name="disaster_type" value={disaster_type} onChange={(e) => setDisasterType(e.target.value)}>
+              <Select name="disaster_type" aria-label="Filter by disaster type" value={disaster_type} onChange={(e) => setDisasterType(e.target.value)}>
                 <option value="">All Types</option>
                 <option value="FLOOD">Flood</option>
                 <option value="CYCLONE">Cyclone</option>
@@ -57,28 +73,37 @@ export function MyIncidentsPage() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Input type="text" placeholder="Search..." className="sm:w-64" />
+              <Input type="text" placeholder="Search by id, type, or description..." value={search} onChange={(e) => setSearch(e.target.value)} className="sm:w-64" />
             </div>
           </div>
 
           {isLoading ? (
-            <div className="text-center py-8 text-muted-foreground">Loading incidents...</div>
+            <LoadingState label="Loading incidents…" className="justify-center py-8" />
           ) : error ? (
-            <div className="text-center py-8 text-destructive">
-              {(error as Error).message || 'Failed to load incidents'}
-            </div>
-          ) : data?.items?.length === 0 ? (
-            <div className="text-center py-8">
-              <p className="text-muted-foreground mb-4">No incidents found.</p>
-              <Link to="/report">
-                <Button>Report New Incident</Button>
-              </Link>
-            </div>
+            <ErrorState title="Failed to load incidents" description={(error as Error).message} />
+          ) : items.length === 0 ? (
+            <EmptyState
+              title="No incidents found."
+              description="You have not reported any incidents yet."
+              action={
+                <Link to="/report">
+                  <Button>Report New Incident</Button>
+                </Link>
+              }
+            />
+          ) : filteredItems.length === 0 ? (
+            <EmptyState
+              title="No matching incidents."
+              description="No incidents match your search. Try different keywords or clear the search."
+              action={
+                <Button variant="outline" size="sm" onClick={() => setSearch('')}>Clear search</Button>
+              }
+            />
           ) : (
             <>
               <div className="space-y-4">
-                {data?.items?.map((incident) => (
-                  <Card key={incident.id} className="hover:shadow-md transition-shadow cursor-pointer">
+                {filteredItems.map((incident) => (
+                  <Card key={incident.id} className="hover:shadow-md transition-shadow">
                     <CardContent className="p-4">
                       <div className="flex flex-wrap justify-between items-start gap-4">
                         <div>
@@ -88,13 +113,9 @@ export function MyIncidentsPage() {
                           <span className="ml-2 text-sm text-muted-foreground">{incident.disaster_type}</span>
                         </div>
                         <div className="flex items-center gap-4 text-sm">
-                          <span className="px-2 py-1 rounded-full bg-blue-100 text-blue-800">
-                            {incident.status}
-                          </span>
+                          <StatusBadge status={incident.status} />
                           {incident.predicted_severity && (
-                            <span className="px-2 py-1 rounded-full bg-orange-100 text-orange-800">
-                              {incident.predicted_severity}
-                            </span>
+                            <SeverityBadge severity={incident.predicted_severity} />
                           )}
                           <span className="text-muted-foreground">
                             {new Date(incident.created_at).toLocaleDateString()}

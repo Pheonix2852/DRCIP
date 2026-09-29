@@ -6,16 +6,12 @@ import { teams } from '../lib/teams'
 import { assignments } from '../lib/assignments'
 import { useRealtime } from '../hooks/useRealtime'
 import { useAuth } from '../contexts/AuthContext'
-
-function statusColor(status: string): string {
-  switch (status) {
-    case 'ACTIVE': return 'bg-green-100 text-green-800'
-    case 'DEPLOYED': return 'bg-blue-100 text-blue-800'
-    case 'UNAVAILABLE': return 'bg-red-100 text-red-800'
-    case 'MAINTENANCE': return 'bg-amber-100 text-amber-800'
-    default: return 'bg-gray-100 text-gray-700'
-  }
-}
+import { PageHeader } from '../components/PageHeader'
+import { StatusBadge } from '../components/StatusBadge'
+import { EmptyState } from '../components/EmptyState'
+import { ErrorState } from '../components/ErrorState'
+import { LoadingState } from '../components/LoadingState'
+import { UnavailableState } from '../components/UnavailableState'
 
 export function FieldOperationsDashboard() {
   useRealtime()
@@ -38,16 +34,18 @@ export function FieldOperationsDashboard() {
   return (
     <div className="max-w-6xl mx-auto space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-xl font-semibold">Field Operations Dashboard</h1>
+        <PageHeader title="Field Operations Dashboard" className="mb-0" />
         <Link to="/field/update">
           <Button variant="outline" size="sm">Status Update</Button>
         </Link>
       </div>
 
-      {wsStatus !== 'open' && (
-        <div className="text-xs px-3 py-1 rounded-full bg-amber-100 text-amber-800 w-fit" role="status">
-          Realtime {wsStatus === 'reconnecting' ? 'reconnecting...' : 'unavailable'} — updates will be fetched
-        </div>
+      {(wsStatus === 'closed' || wsStatus === 'reconnecting') && (
+        <UnavailableState
+          tone="degraded"
+          title={wsStatus === 'reconnecting' ? 'Realtime reconnecting…' : 'Realtime unavailable — updates will be fetched'}
+          description="Team and assignment data below is from the last successful fetch. It may be out of date until the connection recovers."
+        />
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -58,18 +56,16 @@ export function FieldOperationsDashboard() {
             </CardHeader>
             <CardContent>
               {teamQuery.isLoading ? (
-                <div className="text-center py-8 text-muted-foreground" role="status">Loading team...</div>
+                <LoadingState label="Loading team…" className="justify-center py-8" />
               ) : teamQuery.error ? (
-                <div className="text-sm text-destructive" role="alert">
-                  {(teamQuery.error as Error).message || 'Failed to load team'}
-                </div>
+                <ErrorState title="Failed to load team" description={(teamQuery.error as Error).message} />
               ) : !team ? (
-                <div className="text-center py-8 text-muted-foreground">No team is assigned to you.</div>
+                <EmptyState title="No team is assigned to you." description="A disaster coordinator assigns field teams. Contact your coordinator if you believe this is incorrect." />
               ) : (
                 <Link to="/field/team" className="block hover:bg-muted/50 rounded-md p-2 -m-2">
                   <div className="flex items-center justify-between gap-2 flex-wrap">
                     <span className="font-medium min-w-0 break-words">{team.name}</span>
-                    <span className={`px-2 py-0.5 rounded-full text-xs ${statusColor(team.status)}`}>{team.status}</span>
+                    <StatusBadge status={team.status} />
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">Leader: {team.leader.name} · {team.members.length} members</p>
                 </Link>
@@ -84,22 +80,20 @@ export function FieldOperationsDashboard() {
             </CardHeader>
             <CardContent>
               {assignmentsQuery.isLoading ? (
-                <div className="text-center py-8 text-muted-foreground" role="status">Loading assignments...</div>
+                <LoadingState label="Loading assignments…" className="justify-center py-8" />
               ) : assignmentsQuery.error ? (
-                <div className="text-sm text-destructive" role="alert">
-                  {(assignmentsQuery.error as Error).message || 'Failed to load assignments'}
-                </div>
+                <ErrorState title="Failed to load assignments" description={(assignmentsQuery.error as Error).message} />
               ) : !activeAssignment ? (
-                <div className="text-center py-8">
-                  <p className="text-muted-foreground">No active assignment.</p>
-                  <p className="text-xs text-muted-foreground mt-1">Use Field Update when you begin a task.</p>
-                </div>
+                <EmptyState
+                  title="No active assignment."
+                  description="Use Field Update when you begin a task."
+                />
               ) : (
                 <div className="space-y-2">
                   <Link to="/field/update" className="block hover:bg-muted/50 rounded-md p-2 -m-2">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-medium text-sm">{activeAssignment.id}</span>
-                      <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 text-xs">{activeAssignment.status}</span>
+                      <StatusBadge status={activeAssignment.status} />
                     </div>
                     <p className="text-xs text-muted-foreground mt-1">
                       Incident: <span className="font-mono">{activeAssignment.incident_id}</span>
@@ -144,7 +138,7 @@ export function FieldOperationsDashboard() {
                         </Link>
                       </div>
                       <div className="drcip-dense-row-actions">
-                        <span className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 text-xs">{a.status}</span>
+                        <StatusBadge status={a.status} />
                       </div>
                     </div>
                   </li>
