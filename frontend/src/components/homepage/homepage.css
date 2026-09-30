@@ -1298,3 +1298,70 @@ ul[data-testid='incident-queue'] li {
     transform: translate(-50%, -50%) scale(1.08);
   }
 }
+
+/* ----------------------------------------------------------
+   Aurora page background — approved homepage-only gradient
+   exception (§5.4.1). Mounted once on the page root of `/` only.
+   Layer sits above the opaque section backgrounds (so it is
+   actually visible) but below the sticky nav and overlays.
+   Decorative and inert to pointer events.
+   ---------------------------------------------------------- */
+
+.drcip-aurora-wash {
+  position: absolute;
+  inset: -12%; /* bleed past the viewport so no edge lineates */
+  background-image: repeating-linear-gradient(
+    100deg,
+    rgba(47, 104, 240, 0.18) 0%,
+    rgba(169, 198, 249, 0.12) 9%,
+    rgba(238, 243, 250, 0.16) 18%,
+    rgba(22, 73, 184, 0.14) 27%,
+    rgba(47, 104, 240, 0.18) 36%
+  );
+  background-size: 300% 200%;
+  background-position: 50% 50%;
+  filter: blur(48px);
+  opacity: 0.85;
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0.95),
+    rgba(0, 0, 0, 0.55) 45%,
+    rgba(0, 0, 0, 0.65) 75%,
+    rgba(0, 0, 0, 0.35)
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0.95),
+    rgba(0, 0, 0, 0.55) 45%,
+    rgba(0, 0, 0, 0.65) 75%,
+    rgba(0, 0, 0, 0.35)
+  );
+  animation: drcip-aurora-drift 22s linear infinite;
+  will-change: background-position;
+}
+
+/* Underlying pools of cobalt so the whole page carries a faint
+   aurora tint even below the masked band (subtle, text-safe). */
+.drcip-home .drcip-aurora-base {
+  position: absolute;
+  inset: -12%;
+  background:
+    radial-gradient(58% 46% at 18% 10%, rgba(47, 104, 240, 0.1), transparent 62%),
+    radial-gradient(52% 44% at 84% 14%, rgba(22, 73, 184, 0.08), transparent 60%),
+    radial-gradient(60% 50% at 50% 110%, rgba(169, 198, 249, 0.14), transparent 68%);
+}
+
+@keyframes drcip-aurora-drift {
+  from {
+    background-position: 50% 50%;
+  }
+  to {
+    background-position: 350% 50%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .drcip-aurora-wash {
+    animation: none;
+  }
+}
