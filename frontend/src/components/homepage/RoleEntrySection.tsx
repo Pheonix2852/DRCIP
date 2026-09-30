@@ -55,8 +55,9 @@ export function RoleEntrySection() {
   return (
     <section
       ref={ref}
+      id="roles"
       aria-labelledby="roles-heading"
-      className="border-t border-border bg-surface-cool py-20 md:py-28"
+      className="scroll-mt-24 border-t border-border bg-surface-cool py-20 md:py-28"
     >
       <div className="container-drcip">
         <SectionHeading

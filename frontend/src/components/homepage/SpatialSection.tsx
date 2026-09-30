@@ -21,8 +21,9 @@ export function SpatialSection() {
   return (
     <section
       ref={ref}
+      id="spatial"
       aria-labelledby="spatial-heading"
-      className="border-t border-border bg-surface-cool py-20 md:py-28"
+      className="scroll-mt-24 border-t border-border bg-surface-cool py-20 md:py-28"
     >
       <div className="container-drcip">
         <SectionHeading

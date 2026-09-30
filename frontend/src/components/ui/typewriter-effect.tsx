@@ -1,4 +1,4 @@
-import { motion } from "motion/react"
+import { motion, useReducedMotion } from "motion/react"
 import { cn } from "@/lib/utils"
 
 export interface TypeWord {
@@ -6,44 +6,53 @@ export interface TypeWord {
   className?: string
 }
 
-export interface TypewriterEffectProps {
+export interface TypewriterEffectSmoothProps {
   words: TypeWord[]
   className?: string
   cursorClassName?: string
 }
 
 /**
- * Word-by-word reveal with a blinking cursor. Triggers once when scrolled
- * into view. `prefers-reduced-motion` is handled by the `whileInView` motor
- * only animating opacity (no movement) in that mode via the CSS override.
+ * Homepage final-CTA centerpiece, adapted from the supplied Aceternity
+ * TypewriterEffectSmooth: the line types in left-to-right via a width
+ * reveal, with a blinking cobalt cursor beside it. Replays whenever the
+ * component enters the viewport. `prefers-reduced-motion` renders the full line immediately
+ * with a static cursor.
  */
-export function TypewriterEffect({ words, className, cursorClassName }: TypewriterEffectProps) {
+export function TypewriterEffectSmooth({
+  words,
+  className,
+  cursorClassName,
+}: TypewriterEffectSmoothProps) {
+  const reduceMotion = useReducedMotion()
+  const label = words.map((word) => word.text).join(" ")
+
   return (
-    <p
-      className={cn("flex flex-wrap items-center justify-center gap-x-1 text-lg md:text-2xl", className)}
-      aria-label={words.map((word) => word.text).join(" ")}
-    >
-      {words.map((word, i) => (
-        <motion.span
-          key={i}
-          initial={{ opacity: 0 }}
-          whileInView={{ opacity: 1 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.35, delay: i * 0.08 }}
-          className={cn("typewriter-word", word.className)}
-        >
-          {word.text}
-        </motion.span>
-      ))}
+    <div className={cn("flex items-center justify-center gap-x-1", className)} aria-label={label}>
+      <motion.div
+        initial={reduceMotion ? { width: "fit-content" } : { width: "0%" }}
+        whileInView={{ width: "fit-content" }}
+        viewport={{ once: false, amount: 0.6 }}
+        transition={reduceMotion ? { duration: 0 } : { duration: 2, ease: "linear", delay: 0.3 }}
+        className="overflow-hidden pb-1"
+        aria-hidden="true"
+      >
+        <div className="home-h2 flex whitespace-nowrap">
+          {words.map((word, idx) => (
+            <span key={idx} className={cn("inline-block", word.className)}>
+              {word.text}
+              {idx < words.length - 1 ? "\u00A0" : ""}
+            </span>
+          ))}
+        </div>
+      </motion.div>
       <motion.span
         aria-hidden="true"
-        initial={{ opacity: 0 }}
-        whileInView={{ opacity: 1 }}
-        viewport={{ once: true }}
-        className={cn("typewriter-cursor", cursorClassName)}
-      >
-        |
-      </motion.span>
-    </p>
-  )
+        initial={{ opacity: reduceMotion ? 1 : 0.2 }}
+        animate={reduceMotion ? { opacity: 1 } : { opacity: [0.2, 1, 0.2] }}
+        transition={reduceMotion ? { duration: 0 } : { duration: 1, repeat: Infinity, ease: "easeInOut" }}
+        className={cn("inline-block h-[0.85em] w-[3px] shrink-0 rounded-sm bg-cobalt-electric", cursorClassName)}
+      />
+    </div>
+  );
 }

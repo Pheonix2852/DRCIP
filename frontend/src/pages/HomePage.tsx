@@ -2,11 +2,12 @@ import { useState } from "react";
 import { AuroraBackground } from "../components/ui/aurora-background";
 import { MultiStepLoader } from "../components/ui/multi-step-loader";
 import { SmoothScroll } from "../components/homepage/SmoothScroll";
-import { PublicNav } from "../components/homepage/PublicNav";
+import { ResizableNavbar } from "../components/homepage/ResizableNavbar";
 import { HeroSection } from "../components/homepage/HeroSection";
 import { ProblemSection } from "../components/homepage/ProblemSection";
 import { WorkflowSection } from "../components/homepage/WorkflowSection";
 import { ProductUISection } from "../components/homepage/ProductUISection";
+import { WorldMapSection } from "../components/homepage/WorldMapSection";
 import { SpatialSection } from "../components/homepage/SpatialSection";
 import { TrustSection } from "../components/homepage/TrustSection";
 import { RoleEntrySection } from "../components/homepage/RoleEntrySection";
@@ -42,12 +43,13 @@ export function HomePage() {
             Skip to content
           </a>
           <SmoothScroll />
-          <PublicNav start={!loading} />
+          <ResizableNavbar />
           <main id="main-content">
             <HeroSection start={!loading} />
             <ProblemSection />
             <WorkflowSection />
             <ProductUISection />
+            <WorldMapSection />
             <SpatialSection />
             <TrustSection />
             <RoleEntrySection />

@@ -1,17 +1,17 @@
-/* ============================================================
-   DRCIP Public Homepage — Slice 3B v2 material + hero language
+﻿/* ============================================================
+   DRCIP Public Homepage â€” Slice 3B v2 material + hero language
    Adapts the ConSentinel design-unit system (Prompt.txt) to DRCIP.
    Everything is scoped under `.drcip-home` except the hero's
    design-unit tokens, which are scoped to the hero stage itself.
 
    Token discipline: colors re-derive from the DRCIP design tokens
    (cool canvas / ink / muted / cobalt) so the existing Tailwind
-   utilities (bg-canvas, text-ink, border-border, bg-drcip-primary …)
+   utilities (bg-canvas, text-ink, border-border, bg-drcip-primary â€¦)
    resolve correctly without per-page arbitrary values.
    ============================================================ */
 
 /* ----------------------------------------------------------
-   1. Material tokens — scoped to the public homepage
+   1. Material tokens â€” scoped to the public homepage
    ---------------------------------------------------------- */
 
 .drcip-home {
@@ -38,7 +38,7 @@
   --home-accent: #1649B8;
   --home-accent-2: #2F68F0;
 
-  /* Glass system — reusable translucent surface primitives */
+  /* Glass system â€” reusable translucent surface primitives */
   --home-glass-bg: rgba(255, 255, 255, 0.55);
   --home-glass-bg-strong: rgba(255, 255, 255, 0.78);
   --home-glass-border: rgba(215, 222, 232, 0.9);
@@ -121,7 +121,7 @@
 }
 
 /* ----------------------------------------------------------
-   3. Glass system — reusable homepage glass primitives
+   3. Glass system â€” reusable homepage glass primitives
    ---------------------------------------------------------- */
 
 @supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
@@ -151,18 +151,6 @@
 .home-glass-chip {
   border: 1px solid var(--home-glass-border);
   box-shadow: 0 4px 16px rgba(11, 18, 32, 0.05);
-}
-
-/* ----------------------------------------------------------
-   4. Sticky glass navigation
-   ---------------------------------------------------------- */
-
-.nav-glass {
-  background: var(--home-glass-bg-strong);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.85);
-  -webkit-backdrop-filter: blur(var(--home-blur)) saturate(120%);
-  backdrop-filter: blur(var(--home-blur)) saturate(120%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
 }
 
 /* ----------------------------------------------------------
@@ -198,10 +186,10 @@
 }
 
 /* ============================================================
-   6. HERO STAGE — design-unit system (reference §1–6)
+   6. HERO STAGE â€” design-unit system (reference Â§1â€“6)
    The hero is a full-viewport art-directed composition. Every
    foreground size/offset is `calc(N*var(--u))` where --u is one
-   reference pixel of the 1280×960 comp, scaled to the viewport.
+   reference pixel of the 1280Ã—960 comp, scaled to the viewport.
    ============================================================ */
 
 .drcip-hero {
@@ -219,7 +207,7 @@
   }
 }
 
-/* ── Tier 1 · wide desktop ── */
+/* â”€â”€ Tier 1 Â· wide desktop â”€â”€ */
 @media (min-width: 1024px) {
   .drcip-hero {
     --u: min(100vw / 1280, 100vh / 960);
@@ -231,7 +219,7 @@
   }
 }
 
-/* ── Tier 2 · compact / portrait tablet ── */
+/* â”€â”€ Tier 2 Â· compact / portrait tablet â”€â”€ */
 @media (min-width: 641px) and (max-width: 1023px) {
   .drcip-hero {
     --u: min(100vw / 880, 100vh / 1180);
@@ -243,8 +231,8 @@
   }
 }
 
-/* ── Tier 3 · mobile — two scales: --u (composition + display type)
-      and --t (floored reading/control type) ── */
+/* â”€â”€ Tier 3 Â· mobile â€” two scales: --u (composition + display type)
+      and --t (floored reading/control type) â”€â”€ */
 @media (max-width: 640px) {
   .drcip-hero {
     --u: min(100vw / 600, 100vh / 940);
@@ -258,7 +246,7 @@
   }
 }
 
-/* ── Stage assets ── */
+/* â”€â”€ Stage assets â”€â”€ */
 .hero-plate {
   position: absolute;
   inset: -2px;
@@ -301,7 +289,7 @@
   pointer-events: none;
 }
 
-/* WebGL spatial field — ambient cobalt point cloud over the plate,
+/* WebGL spatial field â€” ambient cobalt point cloud over the plate,
    beneath the scrim and foreground. Paints nothing until the OGL
    renderer's opacity ramp kicks in. */
 .hero-field {
@@ -315,7 +303,7 @@
   mask-image: linear-gradient(to bottom, #000 72%, transparent 100%);
 }
 
-/* ── Foreground column (brand-safe top padding clears the 64px nav) ── */
+/* â”€â”€ Foreground column (brand-safe top padding clears the 64px nav) â”€â”€ */
 .hero-fore {
   position: absolute;
   inset: 0;
@@ -337,7 +325,7 @@
   width: 100%;
 }
 
-/* ── Copy column ── */
+/* â”€â”€ Copy column â”€â”€ */
 .hero-copy {
   flex: 1 1 auto;
   min-width: 0;
@@ -396,13 +384,13 @@
   font-weight: 470;
 }
 
-/* ── Glass panel slot ── */
+/* â”€â”€ Glass panel slot â”€â”€ */
 .hero-panel {
   flex: 0 0 auto;
   width: calc(304 * var(--u));
 }
 
-/* ── Bottom meta row ── */
+/* â”€â”€ Bottom meta row â”€â”€ */
 .hero-meta {
   flex: none;
   margin-top: auto;
@@ -420,7 +408,7 @@
 }
 
 /* ------------------------------------------------
-   Glass panel internals (reference §5 panel)
+   Glass panel internals (reference Â§5 panel)
    ------------------------------------------------ */
 .hp {
   width: 100%;
@@ -592,7 +580,7 @@
   font-size: calc(10 * var(--u));
 }
 
-/* ── Tier 2 layout — column stack, panel right-aligned ── */
+/* â”€â”€ Tier 2 layout â€” column stack, panel right-aligned â”€â”€ */
 @media (min-width: 641px) and (max-width: 1023px) {
   .hero-fore {
     gap: calc(40 * var(--u));
@@ -623,7 +611,7 @@
   }
 }
 
-/* ── Tier 3 layout + re-measured reading type in --t ── */
+/* â”€â”€ Tier 3 layout + re-measured reading type in --t â”€â”€ */
 @media (max-width: 640px) {
   /* Mobile: the foreground participates in flow so a tall column grows
      the stage instead of being clipped by an absolute inset. */
@@ -743,7 +731,7 @@
 }
 
 /* ============================================================
-   6. Reduced motion — the hero renders its settled frame
+   6. Reduced motion â€” the hero renders its settled frame
    ============================================================ */
 
 @media (prefers-reduced-motion: reduce) {
@@ -754,7 +742,7 @@
 }
 
 /* ============================================================
-   7. Product surfaces — framed application viewports
+   7. Product surfaces â€” framed application viewports
    ============================================================ */
 
 .surface-frame {
@@ -1006,11 +994,11 @@
 }
 
 /* ----------------------------------------------------------
-   8. Interactive states — marker↔queue sync + surfaces
+   8. Interactive states â€” markerâ†”queue sync + surfaces
    ---------------------------------------------------------- */
 
 /* Active map marker: cobalt ring + lift (pointer hover, not the
-   resting state — SVG-drawn support zones and pins stay calm). */
+   resting state â€” SVG-drawn support zones and pins stay calm). */
 .demo-map-marker {
   transition: opacity 0.15s ease;
 }
@@ -1083,7 +1071,7 @@ ul[data-testid='incident-queue'] li {
 }
 
 /* ----------------------------------------------------------
-   10. Glass material system — extended primitives
+   10. Glass material system â€” extended primitives
    Objects placed in the environment, not every element is a card.
    ---------------------------------------------------------- */
 
@@ -1300,8 +1288,8 @@ ul[data-testid='incident-queue'] li {
 }
 
 /* ----------------------------------------------------------
-   Aurora page background — approved homepage-only gradient
-   exception (§5.4.1). Mounted once on the page root of `/` only.
+   Aurora page background â€” approved homepage-only gradient
+   exception (Â§5.4.1). Mounted once on the page root of `/` only.
    Layer sits above the opaque section backgrounds (so it is
    actually visible) but below the sticky nav and overlays.
    Decorative and inert to pointer events.

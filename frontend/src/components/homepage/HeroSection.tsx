@@ -168,7 +168,7 @@ export function HeroSection({ start }: { start: boolean }) {
       ref={sectionRef}
       aria-label="DRCIP introduction"
       data-hero-stage
-      className="drcip-hero -mt-16"
+      className="drcip-hero -mt-20"
     >
       <img
         src={heroResponse}

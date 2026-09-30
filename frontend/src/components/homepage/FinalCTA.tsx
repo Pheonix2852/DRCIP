@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { useReveal } from './useReveal'
 import { primaryCtaClass } from './cta'
+import { TypewriterEffectSmooth } from '../ui/typewriter-effect'
 import convergenceSvg from '../../assets/homepage/spatial/drcip-convergence-paths.svg'
 
 export function FinalCta() {
@@ -21,10 +22,20 @@ export function FinalCta() {
       <div className="container-drcip relative">
         <div className="mx-auto max-w-3xl text-center" data-reveal>
           <p className="home-eyebrow">Begin Coordinating</p>
-          <h2 id="final-cta-heading" className="home-h2 mt-5">
+          {/* Visually-hidden heading keeps the section label; the typewriter
+              renders the same words as the visual centerpiece. */}
+          <h2 id="final-cta-heading" className="sr-only">
             Ready to coordinate?
           </h2>
-          <p className="home-lede mx-auto">
+          <TypewriterEffectSmooth
+            words={[
+              { text: 'Ready' },
+              { text: 'to' },
+              { text: 'coordinate?', className: 'text-cobalt-deep' },
+            ]}
+            className="mt-5"
+          />
+          <p className="home-lede mx-auto mt-4">
             Sign in to access the DRCIP coordination platform.
           </p>
           <div className="mt-10">

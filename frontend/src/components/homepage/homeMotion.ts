@@ -23,7 +23,9 @@ export function scrollToSection(id: string) {
   const el = document.getElementById(id)
   if (!el) return
   if (activeLenis) {
-    activeLenis.scrollTo(el, { offset: -76 })
+    // Sections carry their own scroll-mt-* (also used by the native fallback
+    // and any #hash navigation), so no extra offset — otherwise it double stacks.
+    activeLenis.scrollTo(el, { offset: 0 })
   } else {
     el.scrollIntoView({ block: 'start' })
   }

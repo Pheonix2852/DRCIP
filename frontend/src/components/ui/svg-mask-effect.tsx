@@ -1,49 +1,141 @@
-import { useCallback, useRef, type PointerEvent as ReactPointerEvent, type ReactNode } from "react"
-import { motion, useMotionTemplate, useMotionValue } from "motion/react"
-import { cn } from "@/lib/utils"
+import { useEffect, useRef, type ReactNode } from "react";
+import { motion, useMotionValue, useReducedMotion, useSpring, useTransform } from "motion/react";
+import { cn } from "@/lib/utils";
 
 interface MaskContainerProps {
-  children: ReactNode
-  className?: string
-  radius?: number
+  children?: ReactNode;
+  revealText?: ReactNode;
+  className?: string;
+
+  /** Mask diameter in pixels when idle. */
+  size?: number;
+
+  /** Mask diameter in pixels while hovered. */
+  revealSize?: number;
 }
 
-/**
- * Pointer-following CSS radial mask used for the editorial "image reveal" on
- * the public homepage. The masked layer stays centered (fully visible) when
- * no pointer is present or motion is reduced.
- */
-export function MaskContainer({ children, className, radius = 260 }: MaskContainerProps) {
-  const ref = useRef<HTMLDivElement>(null)
-  const mx = useMotionValue(50)
-  const my = useMotionValue(50)
-  const maskImage = useMotionTemplate`radial-gradient(circle at ${mx}% ${my}%, black 0%, black ${(radius / 8).toFixed(0)}px, transparent ${(radius / 5).toFixed(0)}%)`
+export function MaskContainer({ children, revealText, className, size = 0, revealSize = 520 }: MaskContainerProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const reduceMotion = useReducedMotion();
 
-  const onPointerMove = useCallback(
-    (e: ReactPointerEvent<HTMLDivElement>) => {
-      const el = ref.current
-      if (!el) return
-      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return
-      const rect = el.getBoundingClientRect()
-      mx.set(((e.clientX - rect.left) / rect.width) * 100)
-      my.set(((e.clientY - rect.top) / rect.height) * 100)
-    },
-    [mx, my],
-  )
+  /*
+   * Pointer position:
+   * MotionValues update without React rerenders.
+   */
+  const rawX = useMotionValue(0);
+  const rawY = useMotionValue(0);
+
+  const x = useSpring(rawX, {
+    stiffness: 700,
+    damping: 45,
+    mass: 0.15,
+  });
+
+  const y = useSpring(rawY, {
+    stiffness: 700,
+    damping: 45,
+    mass: 0.15,
+  });
+
+  /*
+   * Mask size:
+   * 0px when idle.
+   * revealSize when hovered.
+   */
+  const maskSize = useMotionValue(size);
+
+  const smoothMaskSize = useSpring(maskSize, {
+    stiffness: 650,
+    damping: 42,
+    mass: 0.15,
+  });
+
+  /*
+   * Keep the circular mask centered on the cursor.
+   */
+  const maskPosition = useTransform(
+    [x, y, smoothMaskSize],
+    ([currentX, currentY, currentSize]) =>
+      `${Number(currentX) - Number(currentSize) / 2}px ${Number(currentY) - Number(currentSize) / 2}px`,
+  );
+
+  const maskSizeValue = useTransform(smoothMaskSize, (value) => `${value}px`);
+
+  useEffect(() => {
+    const container = containerRef.current;
+
+    if (!container || reduceMotion) return;
+
+    const handlePointerMove = (event: PointerEvent) => {
+      const rect = container.getBoundingClientRect();
+
+      rawX.set(event.clientX - rect.left);
+      rawY.set(event.clientY - rect.top);
+    };
+
+    container.addEventListener("pointermove", handlePointerMove);
+
+    return () => {
+      container.removeEventListener("pointermove", handlePointerMove);
+    };
+  }, [rawX, rawY, reduceMotion]);
+
+  const handlePointerEnter = () => {
+    if (reduceMotion) return;
+
+    maskSize.set(revealSize);
+  };
+
+  const handlePointerLeave = () => {
+    if (reduceMotion) return;
+
+    maskSize.set(0);
+  };
+
+  /*
+   * Reduced-motion users get the revealed state immediately.
+   */
+  useEffect(() => {
+    if (reduceMotion) {
+      maskSize.set(revealSize);
+    }
+  }, [maskSize, reduceMotion, revealSize]);
 
   return (
     <div
-      ref={ref}
-      onPointerMove={onPointerMove}
+      ref={containerRef}
+      onPointerEnter={handlePointerEnter}
+      onPointerLeave={handlePointerLeave}
       className={cn("relative h-full w-full overflow-hidden", className)}
     >
+      {/*
+       * MASKED / REVEALED LAYER
+       *
+       * This layer sits above the base image.
+       * The actual content inside it is supplied by `children`.
+       */}
       <motion.div
+        className="absolute inset-0 z-10 overflow-hidden"
         aria-hidden="true"
-        className="absolute inset-0"
-        style={{ WebkitMaskImage: maskImage, maskImage }}
+        style={{
+          WebkitMaskImage: "url(/mask.svg)",
+          WebkitMaskRepeat: "no-repeat",
+          WebkitMaskPosition: maskPosition,
+          WebkitMaskSize: maskSizeValue,
+
+          maskImage: "url(/mask.svg)",
+          maskRepeat: "no-repeat",
+          maskPosition: maskPosition,
+          maskSize: maskSizeValue,
+        }}
       >
         {children}
       </motion.div>
+
+      {/*
+       * BASE / ALWAYS-VISIBLE LAYER
+       */}
+      <div className="relative z-0 h-full w-full">{revealText}</div>
     </div>
-  )
+  );
 }
