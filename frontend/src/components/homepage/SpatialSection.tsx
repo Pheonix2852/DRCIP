@@ -1,22 +1,37 @@
-import { useReveal } from './useReveal'
-import { SectionHeading } from './SectionHeading'
-import gridSvg from '../../assets/homepage/spatial/drcip-grid.svg'
-import mapOutlineSvg from '../../assets/homepage/spatial/drcip-map-outline.svg'
-import convergenceSvg from '../../assets/homepage/spatial/drcip-convergence-paths.svg'
+import { Crosshair, Database, Layers, MapPin, Navigation, Radar } from "lucide-react";
+import { useReveal } from "./useReveal";
+import { SectionHeading } from "./SectionHeading";
+import { BentoGrid, BentoGridItem } from "../ui/bento-grid";
+import feature_1 from "../../assets/homepage/features/feature_1.webp";
+import feature_2 from "../../assets/homepage/features/feature_2.webp";
+import feature_3 from "../../assets/homepage/features/feature_3.webp";
+import feature_4 from "../../assets/homepage/features/feature_4.webp";
+import feature_5 from "../../assets/homepage/features/feature_5.webp";
 
-const POINTS = [
-  'Incidents geotagged with precise coordinates via map pin',
-  'Proximity-based resource and shelter discovery',
-  'Interactive map with severity and status overlays',
-] as const
+function MapHeader() {
+  return (
+    <div className="relative flex-1 overflow-hidden rounded-drcip-md border border-border">
+      <img src={feature_1} alt="" aria-hidden="true" className="absolute inset-0 h-full w-full object-cover" />
+      <img src={feature_2} alt="" aria-hidden="true" className="absolute inset-0 h-full w-full object-cover" />
+      <img src={feature_3} alt="" aria-hidden="true" className="absolute inset-0 h-full w-full object-cover" />
+      <img src={feature_4} alt="" aria-hidden="true" className="absolute inset-0 h-full w-full object-cover" />
+      <img src={feature_5} alt="" aria-hidden="true" className="absolute inset-0 h-full w-full object-cover" />
+    </div>
+  );
+}
 
-const ANNOTATIONS = [
-  { label: 'ZONE A · EVAC', left: '18%', top: '66%' },
-  { label: 'TEAM T-03 · 1.8 KM', left: '68%', top: '30%' },
-] as const
+function TileHeader({ src }: { src: string }) {
+  return (
+    <div className="relative min-h-32 flex-1 overflow-hidden rounded-drcip-md border border-border">
+      <img src={src} alt="" aria-hidden="true" className="absolute inset-0 h-full w-full object-cover" />
+    </div>
+  );
+}
+
+const ICON_CLASS = "h-4 w-4 text-cobalt-deep";
 
 export function SpatialSection() {
-  const ref = useReveal<HTMLElement>('pop')
+  const ref = useReveal<HTMLElement>("pop");
 
   return (
     <section
@@ -32,48 +47,42 @@ export function SpatialSection() {
           description="DRCIP maps every incident, resource, team, and shelter in geographic space. Spatial queries find nearby resources. Coordinate-aware intelligence connects location to response. The map is not decoration — it is the operational field."
         />
 
-        <div className="mt-12 grid items-stretch gap-8 lg:grid-cols-12" data-reveal>
-          <div className="relative overflow-hidden rounded-drcip-lg border border-border bg-surface shadow-drcip-md lg:col-span-7">
-            <img src={gridSvg} alt="" aria-hidden="true" className="absolute inset-0 h-full w-full object-cover opacity-25" />
-            <img src={mapOutlineSvg} alt="" aria-hidden="true" className="absolute inset-0 h-full w-full object-contain opacity-20" />
-            <img src={convergenceSvg} alt="" aria-hidden="true" className="absolute inset-0 h-full w-full object-contain opacity-15" />
-
-            <span aria-hidden="true" className="absolute left-1/2 top-1/2 h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full border border-dashed border-cobalt-deep/50" />
-            <span aria-hidden="true" className="absolute left-1/2 top-1/2 h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-cobalt-electric" />
-            <span className="home-mono absolute left-4 top-4 rounded-drcip-sm bg-surface/85 px-2.5 py-1.5">
-              23.0225° N · 72.5714° E
-            </span>
-
-            {ANNOTATIONS.map((a) => (
-              <span
-                key={a.label}
-                className="home-mono absolute rounded-drcip-sm bg-surface/85 px-2.5 py-1.5"
-                style={{ left: a.left, top: a.top }}
-              >
-                {a.label}
-              </span>
-            ))}
-
-            <p className="absolute bottom-4 left-4 right-3 flex items-center justify-between gap-3">
-              <span className="home-mono">POSTGIS · RESPONSE GRID 04</span>
-              <span className="home-mono">ARANYA DISTRICT</span>
-            </p>
-          </div>
-
-          <div className="flex lg:col-span-5">
-            <ol className="flex w-full flex-col justify-center gap-0">
-              {POINTS.map((point, i) => (
-                <li key={point} className="border-t border-border py-5 first:border-t-0 md:py-6">
-                  <div className="flex items-baseline gap-4">
-                    <span className="home-mono">{String(i + 1).padStart(2, '0')}</span>
-                    <p className="text-[15px] leading-relaxed text-ink">{point}</p>
-                  </div>
-                </li>
-              ))}
-            </ol>
-          </div>
+        <div data-reveal className="mt-12">
+          <BentoGrid>
+            <BentoGridItem
+              className="md:col-span-2"
+              icon={<Radar className={ICON_CLASS} aria-hidden="true" />}
+              title="Unified Incident Management"
+              description="Report, triage, track and resolve incidents with precise locations and supporting media."
+              header={<TileHeader src={feature_1} />}
+            />
+            <BentoGridItem
+              icon={<Radar className={ICON_CLASS} aria-hidden="true" />}
+              title="Field Execution"
+              description="Manage field assignments, team status, progress updates and on-ground incident resolution."
+              header={<TileHeader src={feature_3} />}
+            />
+            <BentoGridItem
+              icon={<MapPin className={ICON_CLASS} aria-hidden="true" />}
+              title="Spatial Intelligence"
+              description="Visualize incidents, resources, shelters, severity and status through location-aware mapping."
+              header={<TileHeader src={feature_4} />}
+            />
+            <BentoGridItem
+              icon={<Layers className={ICON_CLASS} aria-hidden="true" />}
+              title="Resource & Shelter Coordination"
+              description="Locate, assign and track resources, teams, shelters, capacity and availability."
+              header={<TileHeader src={feature_2} />}
+            />
+            <BentoGridItem
+              icon={<Database className={ICON_CLASS} aria-hidden="true" />}
+              title="Audit & Accountability"
+              description="Maintain traceable decisions, assignment history, notifications, reports and administrative activity."
+              header={<TileHeader src={feature_5} />}
+            />
+          </BentoGrid>
         </div>
       </div>
     </section>
-  )
+  );
 }
