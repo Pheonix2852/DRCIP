@@ -1,3 +1,4 @@
+import { unwrap } from './utils'
 import api from './api'
 import type { LatestPrediction, SeverityLevel, DisasterType, IncidentStatus } from '@drcip/contracts'
 
@@ -68,15 +69,6 @@ export interface MediaUploadResponse {
   media_type: string
   mime_type: string
   secure_url: string
-}
-
-// Unwrap the {success, data} envelope from an axios response so callers
-// work with the inner payload directly. Throws on error envelopes.
-function unwrap<T>(res: { data?: { success?: boolean; data?: unknown; error?: { message?: string } } }): T {
-  if (!res.data || !res.data.success) {
-    throw new Error(res.data?.error?.message || 'Request failed')
-  }
-  return res.data.data as T
 }
 
 export const incidents = {

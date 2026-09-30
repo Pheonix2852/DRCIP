@@ -1,3 +1,4 @@
+import { unwrap } from './utils'
 import api from './api'
 
 export interface AuditLogSummary {
@@ -30,12 +31,6 @@ export interface AuditLogListResponse {
   pagination: { page: number; limit: number; total: number; total_pages: number }
 }
 
-function unwrap<T>(res: { data?: { success?: boolean; data?: unknown; error?: { message?: string } } }): T {
-  if (!res.data || !res.data.success) {
-    throw new Error(res.data?.error?.message || 'Request failed')
-  }
-  return res.data.data as T
-}
 
 export function canViewAuditLogs(role?: string): boolean {
   return role === 'DISASTER_COORDINATOR' || role === 'ADMINISTRATOR'

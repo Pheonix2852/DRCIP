@@ -1,5 +1,4 @@
 import { Router } from 'express';
-import { v4 as uuidv4 } from 'uuid';
 import { AppRequest } from '../middleware/index';
 import { AppError } from '../middleware/errorHandler';
 import { requireRole } from '../middleware/auth';
@@ -145,7 +144,7 @@ router.post('/:notificationId/read', async (req: AppRequest, res, next) => {
 router.post('/broadcast', requireRole('DISASTER_COORDINATOR', 'ADMINISTRATOR'), async (req: AppRequest, res, next) => {
   try {
     const body = broadcastNotificationSchema.parse(req.body);
-    const broadcastId = uuidv4();
+    const broadcastId = crypto.randomUUID();
 
     const result = await prisma.$transaction(async (tx) => {
       const { recipients, rows } = await NotificationService.notifyBroadcast(tx, {

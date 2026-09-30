@@ -1,3 +1,4 @@
+import { unwrap } from './utils'
 import api from './api'
 
 export interface TeamMember {
@@ -42,12 +43,6 @@ export interface AddMemberRequest {
   contact_reference?: string
 }
 
-function unwrap<T>(res: { data?: { success?: boolean; data?: unknown; error?: { message?: string } } }): T {
-  if (!res.data || !res.data.success) {
-    throw new Error(res.data?.error?.message || 'Request failed')
-  }
-  return res.data.data as T
-}
 
 // Role-scoped UI capability helper. The backend remains authoritative.
 export function canManageTeams(role?: string): boolean {

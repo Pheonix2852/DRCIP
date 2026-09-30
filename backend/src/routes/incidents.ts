@@ -4,7 +4,6 @@ import { AppError } from '../middleware/errorHandler';
 import { requireRole } from '../middleware/auth';
 import prisma from '../lib/prisma';
 import { Prisma } from '@prisma/client';
-import { v4 as uuidv4 } from 'uuid';
 import { createIncidentSchema, incidentQuerySchema, triageSchema, resolveIncidentSchema, type NotificationPriority, type DisasterType } from '@drcip/contracts';
 import { WebSocketService } from '../services/WebSocketService';
 import { NotificationService, type CreatedNotification } from '../services/NotificationService';
@@ -82,7 +81,7 @@ router.post('/', async (req: AppRequest, res, next) => {
   try {
     const body = createIncidentSchema.parse(req.body);
 
-    const publicId = `INC-${uuidv4().slice(0, 8).toUpperCase()}`;
+    const publicId = `INC-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
 
     const incident = await prisma.$transaction(async (tx) => {
       // Create incident entirely via raw SQL since location is Unsupported geography

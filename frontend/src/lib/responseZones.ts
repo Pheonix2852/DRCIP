@@ -1,11 +1,6 @@
+import { unwrap } from './utils'
 import api from './api'
 
-function unwrap<T>(res: { data?: { success?: boolean; data?: unknown; error?: { message?: string } } }): T {
-  if (!res.data || !res.data.success) {
-    throw new Error(res.data?.error?.message || 'Request failed')
-  }
-  return res.data.data as T
-}
 
 export interface ResponseZone {
   public_id: string

@@ -48,14 +48,13 @@ env/
 # typescript
 *.tsbuildinfo
 next-env.d.ts
-<<<<<<< HEAD
 
 /docs
 AGENTS.md
-=======
->>>>>>> de94cc632e5b183c701e926000dfd619491e61dc
 # Local verification artifacts
 Test Image.jpg
 backend/prisma/migrations/runtime-*.json
 backend/prisma/migrations/trace_body.json
 Test Users.txt
+*.log
+backend/check_incidents.sql

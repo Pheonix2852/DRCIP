@@ -7,7 +7,7 @@ export interface SmsProvider {
   send(message: SmsMessage): Promise<void>;
 }
 
-export const mockSmsLog: string[] = [];
+const mockSmsLog: string[] = [];
 
 export class MockSmsProvider implements SmsProvider {
   async send(message: SmsMessage): Promise<void> {

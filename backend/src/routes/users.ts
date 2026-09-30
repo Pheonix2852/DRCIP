@@ -4,7 +4,6 @@ import { requireRole } from '../middleware/auth';
 import { AppRequest } from '../middleware/index';
 import prisma from '../lib/prisma';
 import { hashPassword } from '../lib/auth';
-import { v4 as uuidv4 } from 'uuid';
 import { userQuerySchema, createUserSchema, updateUserSchema } from '@drcip/contracts';
 
 const router = Router();
@@ -146,7 +145,7 @@ router.post('/', requireRole('ADMINISTRATOR'), async (req: AppRequest, res, next
 
     const defaultPassword = 'TempPassword123!';
     const hashedPassword = await hashPassword(defaultPassword);
-    const ref = `USR-${uuidv4().slice(0, 8).toUpperCase()}`;
+    const ref = `USR-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
 
     const result = await prisma.$transaction(async (tx) => {
       const user = await tx.user.create({

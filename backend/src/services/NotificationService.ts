@@ -1,5 +1,4 @@
 import { Prisma, UserRole } from '@prisma/client';
-import { v4 as uuidv4 } from 'uuid';
 import prisma from '../lib/prisma';
 import { WebSocketService } from './WebSocketService';
 import { getEmailProvider } from './EmailProvider';
@@ -41,7 +40,7 @@ function channelsFor(role: string): NotificationChannelValue[] {
 }
 
 function newPublicId(): string {
-  return `NTF-${uuidv4().slice(0, 8).toUpperCase()}`;
+  return `NTF-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
 }
 
 export class NotificationService {

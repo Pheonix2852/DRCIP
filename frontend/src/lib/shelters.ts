@@ -1,3 +1,4 @@
+import { unwrap } from './utils'
 import api from './api'
 
 export interface Shelter {
@@ -38,12 +39,6 @@ export interface UpdateShelterRequest {
   capabilities?: Record<string, unknown>
 }
 
-function unwrap<T>(res: { data?: { success?: boolean; data?: unknown; error?: { message?: string } } }): T {
-  if (!res.data || !res.data.success) {
-    throw new Error(res.data?.error?.message || 'Request failed')
-  }
-  return res.data.data as T
-}
 
 export function canManageShelters(role?: string): boolean {
   return role === 'DISASTER_COORDINATOR' || role === 'ADMINISTRATOR'

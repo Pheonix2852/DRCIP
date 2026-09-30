@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { severityColor } from '../components/MapPanel'
+import { severityColor } from '../lib/severityColor'
 
 describe('MapPanel marker mapping', () => {
   it('maps CRITICAL severity to its DESIGN_SYSTEM colour', () => {

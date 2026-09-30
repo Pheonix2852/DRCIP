@@ -4,9 +4,3 @@ export interface MediaStorageProvider {
     secureUrl: string;
   }>;
 }
-
-export interface MediaProviderConfig {
-  cloudName: string;
-  apiKey: string;
-  apiSecret: string;
-}
