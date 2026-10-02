@@ -6,7 +6,7 @@ import { cn } from "../../lib/utils";
 import { Button } from "../ui/button";
 import { Drawer, DrawerContent, DrawerTitle } from "../ui/drawer";
 import { scrollToSection } from "./homeMotion";
-import drcipLockup from "../../assets/brand/drcip-lockup-horizontal.svg";
+import drcipLockup from "../../assets/brand/drcip-lockup.png";
 
 const NAV_ITEMS = [
   { label: "Platform", id: "product" },

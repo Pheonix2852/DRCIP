@@ -4,7 +4,7 @@ import { useAuth } from "../contexts/AuthContext"
 import { Button } from "./ui/button"
 import { Sheet, SheetContent } from "./ui/sheet"
 import { ALL_ROLES, NavItemLink, ROLE_LABELS, renderRoleGroups } from "./app-nav"
-import drcipLockup from "../assets/brand/drcip-lockup-horizontal.svg"
+import drcipLockup from "../assets/brand/drcip-lockup.png"
 
 interface AppSidebarProps {
   open: boolean

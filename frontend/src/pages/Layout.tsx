@@ -32,7 +32,7 @@ import { cn } from "../lib/utils";
 import { Button } from "./ui/button";
 import { Sheet, SheetContent } from "./ui/sheet";
 import { Sidebar, SidebarBody, SidebarHeading, SidebarLink } from "./ui/sidebar";
-import drcipLockup from "../assets/brand/drcip-lockup-horizontal.svg";
+import drcipLockup from "../assets/brand/drcip-lockup.png";
 
 const ROLE_LABELS: Record<string, string> = {
   CITIZEN: "Citizen",

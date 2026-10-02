@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import drcipLockup from '../../assets/brand/drcip-lockup-horizontal.svg'
+import drcipLockup from '../../assets/brand/drcip-lockup.png'
 
 function scrollToSection(id: string) {
   document.getElementById(id)?.scrollIntoView({ block: 'start' })

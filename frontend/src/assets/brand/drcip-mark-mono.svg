@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title">
-  <title id="title">DRCIP monochrome mark</title>
-  <path d="M 652.000 794.000 L 772.000 772.000 L 991.000 991.000" fill="none" stroke="#0B1220" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M 230.000 652.000 L 252.000 772.000 L 33.000 991.000" fill="none" stroke="#0B1220" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M 372.000 230.000 L 252.000 252.000 L 33.000 33.000" fill="none" stroke="#0B1220" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M 794.000 372.000 L 772.000 252.000 L 991.000 33.000" fill="none" stroke="#0B1220" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/>
-  <circle cx="512" cy="512" r="46" fill="#0B1220"/>
-</svg>
