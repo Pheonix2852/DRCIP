@@ -1,4 +1,4 @@
-import { Crosshair, Database, Layers, MapPin, Navigation, Radar } from "lucide-react";
+import { Database, Layers, MapPin, Radar } from "lucide-react";
 import { useReveal } from "./useReveal";
 import { SectionHeading } from "./SectionHeading";
 import { BentoGrid, BentoGridItem } from "../ui/bento-grid";
@@ -7,18 +7,6 @@ import feature_2 from "../../assets/homepage/features/feature_2.webp";
 import feature_3 from "../../assets/homepage/features/feature_3.webp";
 import feature_4 from "../../assets/homepage/features/feature_4.webp";
 import feature_5 from "../../assets/homepage/features/feature_5.webp";
-
-function MapHeader() {
-  return (
-    <div className="relative flex-1 overflow-hidden rounded-drcip-md border border-border">
-      <img src={feature_1} alt="" aria-hidden="true" className="absolute inset-0 h-full w-full object-cover" />
-      <img src={feature_2} alt="" aria-hidden="true" className="absolute inset-0 h-full w-full object-cover" />
-      <img src={feature_3} alt="" aria-hidden="true" className="absolute inset-0 h-full w-full object-cover" />
-      <img src={feature_4} alt="" aria-hidden="true" className="absolute inset-0 h-full w-full object-cover" />
-      <img src={feature_5} alt="" aria-hidden="true" className="absolute inset-0 h-full w-full object-cover" />
-    </div>
-  );
-}
 
 function TileHeader({ src }: { src: string }) {
   return (

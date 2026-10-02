@@ -130,7 +130,6 @@ export function ResizableNavbar() {
           <Lockup />
         </motion.div>
 
-        <div className="flex items-center">
           <motion.div
             data-testid="resizable-nav-links"
             animate={{ backgroundColor: groupBg, boxShadow: groupBox, gap: rightGap }}
@@ -158,7 +157,7 @@ export function ResizableNavbar() {
               Sign In
             </Link>
           </motion.div>
-        </div>
+        
       </motion.div>
 
       {/* Mobile: compact rounded capsule + drawer menu */}

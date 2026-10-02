@@ -1,16 +1,38 @@
 import { useState } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Bell, LogOut, Menu, User, X } from "lucide-react";
+import {
+  Activity,
+  Bell,
+  Bot,
+  Boxes,
+  ClipboardCheck,
+  ClipboardList,
+  Crosshair,
+  FileText,
+  History,
+  Hospital,
+  LayoutDashboard,
+  LogOut,
+  Menu,
+  Radio,
+  ScrollText,
+  Shield,
+  Siren,
+  User,
+  UserRound,
+  Users,
+  X,
+  type LucideIcon,
+} from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { useRealtime } from "../hooks/useRealtime";
 import { notifications } from "../lib/notifications";
 import { cn } from "../lib/utils";
 import { Button } from "./ui/button";
 import { Sheet, SheetContent } from "./ui/sheet";
+import { Sidebar, SidebarBody, SidebarHeading, SidebarLink } from "./ui/sidebar";
 import drcipLockup from "../assets/brand/drcip-lockup-horizontal.svg";
-
-const ALL_ROLES = ["CITIZEN", "FIELD_OFFICER", "DISASTER_COORDINATOR", "ADMINISTRATOR"];
 
 const ROLE_LABELS: Record<string, string> = {
   CITIZEN: "Citizen",
@@ -23,6 +45,7 @@ interface NavItem {
   label: string;
   to: string;
   roles: string[];
+  icon: LucideIcon;
   end?: boolean;
   /** Extra path prefixes that should also activate this item. */
   activePrefixes?: string[];
@@ -37,17 +60,17 @@ const NAV_GROUPS: NavGroup[] = [
   {
     title: "Citizen",
     items: [
-      { label: "Report Incident", to: "/report", roles: ["CITIZEN", "FIELD_OFFICER"] },
-      { label: "My Incidents", to: "/incidents", roles: ["CITIZEN"] },
+      { label: "Report Incident", to: "/report", roles: ["CITIZEN", "FIELD_OFFICER"], icon: Siren },
+      { label: "My Incidents", to: "/incidents", roles: ["CITIZEN"], icon: FileText },
     ],
   },
   {
     title: "Field Operations",
     items: [
-      { label: "Field Dashboard", to: "/field", roles: ["FIELD_OFFICER"], end: true },
-      { label: "My Team", to: "/field/team", roles: ["FIELD_OFFICER"] },
-      { label: "My Assignments", to: "/field/assignments", roles: ["FIELD_OFFICER"] },
-      { label: "Field Update", to: "/field/update", roles: ["FIELD_OFFICER"] },
+      { label: "Field Dashboard", to: "/field", roles: ["FIELD_OFFICER"], end: true, icon: LayoutDashboard },
+      { label: "My Team", to: "/field/team", roles: ["FIELD_OFFICER"], icon: UserRound },
+      { label: "My Assignments", to: "/field/assignments", roles: ["FIELD_OFFICER"], icon: ClipboardCheck },
+      { label: "Field Update", to: "/field/update", roles: ["FIELD_OFFICER"], icon: Radio },
     ],
   },
   {
@@ -60,33 +83,35 @@ const NAV_GROUPS: NavGroup[] = [
         // Incident detail + allocation review (/incidents/:id, /incidents/:id/review)
         // are Command surfaces reached from the dashboard.
         activePrefixes: ["/incidents"],
+        icon: Crosshair,
       },
-      { label: "Assignments", to: "/assignments", roles: ["DISASTER_COORDINATOR", "ADMINISTRATOR"] },
-      { label: "Resources", to: "/resources", roles: ["FIELD_OFFICER", "DISASTER_COORDINATOR", "ADMINISTRATOR"] },
-      { label: "Teams", to: "/teams", roles: ["DISASTER_COORDINATOR", "ADMINISTRATOR"] },
-      { label: "Shelters", to: "/shelters", roles: ["DISASTER_COORDINATOR", "ADMINISTRATOR"] },
+      { label: "Assignments", to: "/assignments", roles: ["DISASTER_COORDINATOR", "ADMINISTRATOR"], icon: ClipboardList },
+      { label: "Resources", to: "/resources", roles: ["FIELD_OFFICER", "DISASTER_COORDINATOR", "ADMINISTRATOR"], icon: Boxes },
+      { label: "Teams", to: "/teams", roles: ["DISASTER_COORDINATOR", "ADMINISTRATOR"], icon: Users },
+      { label: "Shelters", to: "/shelters", roles: ["DISASTER_COORDINATOR", "ADMINISTRATOR"], icon: Hospital },
     ],
   },
   {
     title: "Reports & Intelligence",
     items: [
-      { label: "Reports", to: "/reports", roles: ["DISASTER_COORDINATOR", "ADMINISTRATOR"] },
+      { label: "Reports", to: "/reports", roles: ["DISASTER_COORDINATOR", "ADMINISTRATOR"], icon: ScrollText },
       {
         label: "RAG Assistant",
         to: "/rag",
         roles: ["FIELD_OFFICER", "DISASTER_COORDINATOR", "ADMINISTRATOR"],
         // The Administrator RAG surface lives at /admin/rag.
         activePrefixes: ["/admin/rag"],
+        icon: Bot,
       },
     ],
   },
   {
     title: "Administration",
     items: [
-      { label: "Overview", to: "/admin", roles: ["ADMINISTRATOR"], end: true },
-      { label: "Users", to: "/admin/users", roles: ["ADMINISTRATOR"] },
-      { label: "Audit Log", to: "/admin/audit", roles: ["DISASTER_COORDINATOR", "ADMINISTRATOR"] },
-      { label: "System Health", to: "/admin/health", roles: ["ADMINISTRATOR"] },
+      { label: "Overview", to: "/admin", roles: ["ADMINISTRATOR"], end: true, icon: Shield },
+      { label: "Users", to: "/admin/users", roles: ["ADMINISTRATOR"], icon: Users },
+      { label: "Audit Log", to: "/admin/audit", roles: ["DISASTER_COORDINATOR", "ADMINISTRATOR"], icon: History },
+      { label: "System Health", to: "/admin/health", roles: ["ADMINISTRATOR"], icon: Activity },
     ],
   },
 ];
@@ -102,26 +127,13 @@ function NavItemLink({ item, onNavigate }: { item: NavItem; onNavigate?: () => v
   const isActive =
     matched || (item.activePrefixes?.some((prefix) => location.pathname.startsWith(prefix)) ?? false);
   return (
-    <Link
+    <SidebarLink
+      label={item.label}
       to={item.to}
-      onClick={onNavigate}
-      aria-current={isActive ? "page" : undefined}
-      className={cn(
-        "group relative flex items-center rounded-drcip-md px-3 py-2 text-sm transition-colors",
-        isActive
-          ? "bg-surface font-medium text-ink shadow-drcip-sm"
-          : "text-text-secondary hover:bg-surface-cool hover:text-ink",
-      )}
-    >
-      <span
-        aria-hidden="true"
-        className={cn(
-          "absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-cobalt-deep transition-opacity",
-          isActive ? "opacity-100" : "opacity-0",
-        )}
-      />
-      <span className="truncate">{item.label}</span>
-    </Link>
+      icon={<item.icon className="h-5 w-5" aria-hidden="true" />}
+      active={isActive}
+      onNavigate={onNavigate}
+    />
   );
 }
 
@@ -131,7 +143,7 @@ function renderGroups(role: string, onNavigate?: () => void) {
     if (items.length === 0) return null;
     return (
       <div key={group.title}>
-        <p className="px-3 pb-1 pt-5 font-mono text-[11px] uppercase tracking-wider text-text-muted">{group.title}</p>
+        <SidebarHeading>{group.title}</SidebarHeading>
         <ul className="space-y-0.5">
           {items.map((item) => (
             <li key={item.to}>
@@ -227,16 +239,11 @@ export function Layout() {
       </header>
 
       <div className="flex flex-1 items-stretch">
-        <aside className="hidden w-60 shrink-0 border-r border-border bg-surface md:block">
-          <nav aria-label="Primary" className="sticky top-16 max-h-[calc(100vh-4rem)] overflow-y-auto px-3 py-4">
-            <ul className="space-y-0.5">
-              <li>
-                <NavItemLink item={{ label: "Home", to: "/", roles: ALL_ROLES, end: true }} />
-              </li>
-            </ul>
+        <Sidebar>
+          <SidebarBody>
             {user ? renderGroups(user.role) : null}
-          </nav>
-        </aside>
+          </SidebarBody>
+        </Sidebar>
 
         <main id="main-content" className="min-w-0 flex-1">
           <div className="mx-auto w-full max-w-drcip px-4 py-6 md:px-6 md:py-8 lg:px-8">
@@ -269,11 +276,6 @@ export function Layout() {
             )}
 
             <nav aria-label="Mobile navigation" className="flex-1 overflow-y-auto px-3 pb-4">
-              <ul className="space-y-0.5 pt-3">
-                <li>
-                  <NavItemLink item={{ label: "Home", to: "/", roles: ALL_ROLES, end: true }} onNavigate={() => setSidebarOpen(false)} />
-                </li>
-              </ul>
               {user ? renderGroups(user.role, () => setSidebarOpen(false)) : null}
             </nav>
 

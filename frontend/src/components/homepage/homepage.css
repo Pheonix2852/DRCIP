@@ -1170,29 +1170,6 @@ ul[data-testid='incident-queue'] li {
   transition: color 0.18s ease;
 }
 
-/* ----------------------------------------------------------
-   14. Role entry micro-interactions
-   ---------------------------------------------------------- */
-
-.role-card {
-  transition: transform 0.2s cubic-bezier(0.2, 0.7, 0.3, 1), border-color 0.2s ease, box-shadow 0.2s ease;
-  border-radius: 8px;
-}
-
-.role-card:hover {
-  transform: translateY(-3px);
-  border-color: rgba(22, 73, 184, 0.3);
-  box-shadow: 0 8px 24px rgba(28, 52, 92, 0.08);
-}
-
-.role-card:hover .role-cta-arrow {
-  transform: translateX(3px);
-}
-
-.role-cta-arrow {
-  display: inline-block;
-  transition: transform 0.2s cubic-bezier(0.2, 0.7, 0.3, 1);
-}
 
 /* ----------------------------------------------------------
    15. Demo map pointer depth response
@@ -1264,13 +1241,11 @@ ul[data-testid='incident-queue'] li {
     transform: none;
   }
 
-  .cta-arrow,
-  .role-cta-arrow {
+  .cta-arrow {
     transform: none !important;
   }
 
   .wf-step:hover,
-  .role-card:hover,
   .nav-sign-in:hover,
   .fo-team-row:hover {
     transform: none;

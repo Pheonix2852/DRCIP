@@ -9,6 +9,7 @@ import { Textarea } from './ui/textarea'
 import { Select } from './ui/select'
 import { incidents, type CreateIncidentRequest } from '../lib/incidents'
 import { MapPanel } from '../components/MapPanel'
+import { FileUpload } from '../components/ui/file-upload'
 
 const ACCEPT_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'video/mp4', 'video/webm']
 const MAX_FILES = 5
@@ -171,9 +172,7 @@ export function ReportIncidentPage() {
     }
   }
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selected = Array.from(e.target.files || [])
-    e.target.value = ''
+  const handleFiles = async (selected: File[]) => {
     if (selected.length === 0) return
     const errors: string[] = []
     const accepted: MediaItem[] = []
@@ -294,7 +293,13 @@ export function ReportIncidentPage() {
 
             <div className="space-y-2">
               <Label htmlFor="media">Attach Media (optional, max {MAX_FILES} files, photo 10 MB, video 25 MB / {MAX_VIDEO_SECONDS}s)</Label>
-              <Input id="media" name="media" type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm" multiple onChange={handleFileChange} disabled={submitting || !!createdIncidentId} />
+              <FileUpload
+                id="media"
+                onFiles={handleFiles}
+                accept={ACCEPT_MIME_TYPES}
+                maxFiles={MAX_FILES}
+                disabled={submitting || !!createdIncidentId}
+              />
               {validationErrors.length > 0 && (
                 <div className="mt-2 space-y-1" role="alert">
                   {validationErrors.map((msg) => <div key={msg} className="p-2 rounded-md bg-destructive/10 text-destructive text-xs">{msg}</div>)}
