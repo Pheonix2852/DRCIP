@@ -88,11 +88,6 @@
   color: var(--text-secondary);
 }
 
-.home-rule {
-  height: 1px;
-  background: var(--border);
-}
-
 .home-mono {
   font-family: 'IBM Plex Mono', ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Consolas, monospace;
   font-size: 11.5px;
@@ -118,39 +113,6 @@
   border-top: 1px solid var(--border);
   padding: 12px 16px;
   background: var(--surface);
-}
-
-/* ----------------------------------------------------------
-   3. Glass system â€” reusable homepage glass primitives
-   ---------------------------------------------------------- */
-
-@supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
-  .home-glass {
-    background: var(--home-glass-bg);
-    -webkit-backdrop-filter: blur(var(--home-blur)) saturate(120%);
-    backdrop-filter: blur(var(--home-blur)) saturate(120%);
-  }
-
-  .home-glass-strong {
-    background: var(--home-glass-bg-strong);
-    -webkit-backdrop-filter: blur(var(--home-blur)) saturate(120%);
-    backdrop-filter: blur(var(--home-blur)) saturate(120%);
-  }
-}
-
-@supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
-  .home-glass {
-    background: var(--home-glass-bg-strong);
-  }
-
-  .home-glass-strong {
-    background: var(--home-glass-bg-strong);
-  }
-}
-
-.home-glass-chip {
-  border: 1px solid var(--home-glass-border);
-  box-shadow: 0 4px 16px rgba(11, 18, 32, 0.05);
 }
 
 /* ----------------------------------------------------------
@@ -846,16 +808,8 @@
   background: var(--text-muted);
 }
 
-.status-pill.st-ok .status-dot {
-  background: #18794E;
-}
-
 .status-pill.st-go .status-dot {
   background: #2F68F0;
-}
-
-.status-pill.st-warn .status-dot {
-  background: #C2410C;
 }
 
 /* Map demo surface */
@@ -1075,25 +1029,6 @@ ul[data-testid='incident-queue'] li {
    Objects placed in the environment, not every element is a card.
    ---------------------------------------------------------- */
 
-.glass-surface {
-  background: var(--home-glass-bg);
-  border: 1px solid var(--home-glass-border);
-  box-shadow: 0 1px 2px rgba(11, 18, 32, 0.04), 0 8px 24px rgba(28, 52, 92, 0.06);
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
-}
-
-@supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
-  .glass-surface {
-    -webkit-backdrop-filter: blur(var(--home-blur)) saturate(120%);
-    backdrop-filter: blur(var(--home-blur)) saturate(120%);
-  }
-}
-
-.glass-surface-hover:hover {
-  border-color: rgba(22, 73, 184, 0.3);
-  box-shadow: 0 1px 2px rgba(11, 18, 32, 0.04), 0 12px 32px rgba(28, 52, 92, 0.08);
-}
-
 .glass-accordion {
   background: transparent;
   transition: background 0.18s ease;
@@ -1139,11 +1074,6 @@ ul[data-testid='incident-queue'] li {
 /* ----------------------------------------------------------
    12. Nav active section + micro-interactions
    ---------------------------------------------------------- */
-
-.nav-link-active {
-  color: var(--home-accent) !important;
-  font-weight: 500;
-}
 
 .nav-sign-in:hover {
   transform: translateY(-1px);
@@ -1195,30 +1125,6 @@ ul[data-testid='incident-queue'] li {
 }
 
 /* ----------------------------------------------------------
-   16. Field operations hover states
-   ---------------------------------------------------------- */
-
-.fo-assignment {
-  transition: border-color 0.18s ease, box-shadow 0.18s ease;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-}
-
-.fo-assignment:hover {
-  border-color: var(--home-accent);
-  box-shadow: 0 0 0 1px rgba(22, 73, 184, 0.12);
-}
-
-.fo-team-row {
-  transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
-}
-
-.fo-team-row:hover {
-  border-color: rgba(22, 73, 184, 0.3);
-  background: rgba(47, 104, 240, 0.04);
-}
-
-/* ----------------------------------------------------------
    17. Reports filtered-state text
    ---------------------------------------------------------- */
 
@@ -1246,8 +1152,7 @@ ul[data-testid='incident-queue'] li {
   }
 
   .wf-step:hover,
-  .nav-sign-in:hover,
-  .fo-team-row:hover {
+  .nav-sign-in:hover {
     transform: none;
   }
 

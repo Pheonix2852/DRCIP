@@ -1,9 +1,6 @@
 {
   "name": "drcip",
   "version": "1.0.0",
-  "allowScripts": {
-    "react-day-picker": "true"
-  },
   "private": true,
   "workspaces": [
     "frontend",
@@ -17,5 +14,12 @@
     "lint": "npm run lint --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "db:seed": "npm run db:seed --workspace=backend"
+  },
+  "allowScripts": {
+    "@prisma/client@5.22.0": true,
+    "@prisma/engines@5.22.0": true,
+    "prisma@5.22.0": true,
+    "esbuild@0.28.2": true,
+    "esbuild@0.21.5": true
   }
 }
