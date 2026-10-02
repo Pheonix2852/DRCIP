@@ -27,10 +27,38 @@ import adminRouter from './routes/admin';
 export function createApp() {
   const app = express();
 
+  // CORS production fail-safe: the configured origin(s) are required in
+  // production. Missing/empty CORS_ORIGIN refuses to boot rather than
+  // silently allowing '*'. Non-production keeps the historical '*' default
+  // so local development and the existing test suite are unaffected.
+  const isProduction = process.env.NODE_ENV === 'production';
+  const corsOriginRaw = (process.env.CORS_ORIGIN ?? '').trim();
+  let corsOrigin: string | string[];
+  if (isProduction) {
+    const origins = corsOriginRaw
+      .split(',')
+      .map((o) => o.trim())
+      .filter((o) => o.length > 0);
+    if (origins.length === 0) {
+      throw new Error(
+        'FATAL: CORS_ORIGIN must be set in production. ' +
+          'Configure the allowed frontend origin(s), e.g. ' +
+          'CORS_ORIGIN=https://app.example.com (comma-separated for multiple). ' +
+          'Refusing to fall back to "*".'
+      );
+    }
+    // Array form enforces strict membership: an unlisted Origin gets no
+    // Access-Control-Allow-Origin header. A bare string is reflected on
+    // every response regardless of the requesting origin.
+    corsOrigin = origins;
+  } else {
+    corsOrigin = corsOriginRaw !== '' ? corsOriginRaw : '*';
+  }
+
   // Middleware
   app.use(requestIdMiddleware);
   app.use(cors({
-    origin: process.env.CORS_ORIGIN || '*',
+    origin: corsOrigin,
     credentials: true,
   }));
   app.use(helmet());
