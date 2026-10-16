@@ -2,6 +2,8 @@
 
 A full-stack disaster-response coordination platform that coordinates incident reporting, situational awareness, resource management, decision support, field execution, notifications, operational knowledge, and reporting.
 
+DRCIP v1 is the non-AI operational release: the core platform runs independently of AI/ML model inference. AI/ML model development was stopped and the post-baseline AI/ML implementation/research work was removed from the v1 tree. The pre-existing `intelligence-service` mock/scaffold remains intentionally — it predates that work and is not the active v1 AI/ML implementation.
+
 ## Architecture
 
 The DRCIP platform follows a modular architecture designed for stability and replaceability:
@@ -18,10 +20,9 @@ backend/           - Node/Express API
   ├── Incident management
   ├── Resource & team management
   ├── WebSocket real-time updates
-  └── FastAPI integration gateway
+  └── Intelligence integration gateway (mock scaffold)
 
-intelligence-service/
-  ├── FastAPI Python service
+intelligence-service/   - Pre-existing FastAPI mock/scaffold (not active v1 AI/ML)
   ├── Severity prediction (mock provider)
   ├── Demand forecasting (mock provider)
   ├── Optimization (mock provider)
@@ -31,18 +32,18 @@ shared/contracts/  - Shared TypeScript types and domain contracts
 ```
 
 **Data flow:**
-- REST over WebSocket (authoritative state + real-time updates)
+- REST is authoritative; WebSockets distribute real-time updates
 - PostgreSQL/PostGIS as the system of record
 - Domain contracts decouple frontend from intelligence implementations
-- Intelligence service runs behind the Node API boundary
+- The intelligence scaffold runs behind the Node API boundary
 
 ## Quick Start
 
 ### Prerequisites
 
 - Node.js 20+ / npm (npm workspaces)
-- Python 3.11+
 - PostgreSQL 16+ with PostGIS extension
+- Python 3.11+ (only for the optional `intelligence-service` mock/scaffold)
 
 ### Installation
 
@@ -65,23 +66,24 @@ shared/contracts/  - Shared TypeScript types and domain contracts
 
 3. **Start services**
    ```bash
-   # Terminal 1: Intelligence service (FastAPI)
-   cd intelligence-service
-   uvicorn app.main:app --reload
-
-   # Terminal 2: Backend API (Node/Express)
+   # Terminal 1: Backend API (Node/Express)
    cd backend
    npm run dev
 
-   # Terminal 3: Frontend (Vite)
+   # Terminal 2: Frontend (Vite)
    cd frontend
    npm run dev
+
+   # Optional: pre-existing intelligence mock/scaffold
+   # (not required for the core v1 workflow)
+   cd intelligence-service
+   uvicorn app.main:app --reload
    ```
 
 4. **Access the application**
    - Frontend: http://localhost:5173
    - Backend API: http://localhost:5000
-   - Intelligence Service: http://localhost:8000
+   - Intelligence Service (optional mock/scaffold): http://localhost:8000
 
 ## Project Structure
 
@@ -92,6 +94,7 @@ DRCIP/
 │   │   ├── index.ts               # Main exports
 │   │   ├── domain.ts              # Domain enums and types
 │   │   ├── api.ts                 # API contract types
+│   │   ├── schemas.ts             # Zod validation schemas
 │   │   └── intelligence.ts        # Intelligence contract types
 │   └── package.json
 │
@@ -104,7 +107,7 @@ DRCIP/
 │   │   ├── main.tsx               # Application entry
 │   │   └── index.css              # Tailwind styles
 │   ├── package.json
-│   ├── vite.config.ts             # Vite config with proxy
+│   ├── vite.config.ts             # Vite config (proxy + robots/sitemap generation)
 │   └── tailwind.config.ts
 │
 ├── backend/                       # Node/Express API
@@ -128,16 +131,16 @@ DRCIP/
 │   │   │   ├── notifications.ts  # Notifications API
 │   │   │   └── health.ts         # Health checks
 │   │   ├── services/
-│   │   │   ├── IntelligenceClient.ts  # FastAPI client
+│   │   │   ├── IntelligenceClient.ts  # Intelligence client (mock scaffold)
 │   │   │   └── WebSocketService.ts    # WebSocket management
-│   │   ├── index.ts              # Entry point
-│   │   └── prisma/
-│   │       └── schema.prisma      # Database schema
+│   │   └── index.ts              # Entry point
+│   ├── prisma/
+│   │   └── schema.prisma          # Database schema
 │   ├── .env                       # Environment configuration
 │   ├── tsconfig.json
 │   └── package.json
 │
-├── intelligence-service/          # FastAPI intelligence service
+├── intelligence-service/          # Pre-existing FastAPI mock/scaffold
 │   ├── app/
 │   │   ├── modules/
 │   │   │   ├── severity.py       # Severity prediction (mock)
@@ -157,7 +160,7 @@ DRCIP/
 ### Root workspace
 ```bash
 npm install              # Install all dependencies
-npm run dev              # Install all and run all services
+npm run dev              # Run all workspace dev servers
 npm run typecheck        # Type check all workspaces
 npm run build           # Build all workspaces
 npm run lint            # Lint all workspaces
@@ -215,11 +218,19 @@ Run the project test suites (see Testing below) to verify setup and behavior:
 
 ```bash
 npm test                  # All workspaces (backend, frontend, shared/contracts)
-cd intelligence-service && python -m pytest   # Intelligence Service
 ```
 
 Backend and frontend tests require a running local PostgreSQL instance and a
 seeded test database (see `backend/.env`).
+
+v1 verification results:
+
+- Typecheck: PASS (all workspaces)
+- Lint: PASS (all workspaces)
+- Production build: PASS
+- End-to-end tests: 14/14 passing (Chromium + mobile viewports)
+- Load/stress verification completed; concurrency protections verified
+- Lighthouse (production build): Accessibility 100, Best Practices 100, SEO 100
 
 ## Role-Based Access Control
 
@@ -250,72 +261,31 @@ seeded test database (see `backend/.env`).
 
 ### Intelligence Service endpoints (internal)
 
-Server-side (Node → FastAPI) only; not public API.
+Server-side (Node → FastAPI) only; not public API. These routes belong to the
+pre-existing mock/scaffold and are not an active v1 AI/ML implementation.
 
 - `/internal/v1/predict/severity` - Severity prediction
 - `/internal/v1/forecast/demand` - Demand forecasting
 - `/internal/v1/optimize/allocation` - Allocation optimization
 - `/internal/v1/rag/query` - RAG assistant
 
-## Documentation
-
-All authoritative specifications are in `docs/`:
-
-1. `01_PRD.md` - Product Requirements Document
-2. `02_Functional_Specification.md` - Functional specifications
-3. `03_System_Architecture.md` - Technical architecture
-4. `04_Database_Schema.md` - Database schema
-5. `05_API_Contract.md` - API contracts
-6. `06_UI_UX_Specification.md` - UI/UX requirements
-7. `07_Acceptance_Criteria.md` - Definition of Done
-8. `08_Coding_Standards_Project_Conventions.md` - Coding standards
-
 ## Testing
 
-The repository ships four automated test suites (534 tests total):
+The repository ships four automated test suites (554 tests total):
 
-1. **Backend — 360 tests** (Vitest + Supertest): RBAC, incident lifecycle, assignment lifecycle incl. completion and cancellation reversal, field updates, incident resolution, media validation, notifications, weather, capacity, reports, admin, degraded/AI-fallback paths.
-2. **Frontend — 145 tests** (Vitest + Testing Library): routing/guards, portal pages, forms, realtime reconciliation and critical UI workflows.
+1. **Backend — 375 tests** (Vitest + Supertest): RBAC, incident lifecycle, assignment lifecycle incl. completion and cancellation reversal, field updates, incident resolution, media validation, notifications, weather, capacity, reports, admin, degraded/severity-fallback paths.
+2. **Frontend — 150 tests** (Vitest + Testing Library): routing/guards, portal pages, forms, realtime reconciliation and critical UI workflows.
 3. **Shared contracts — 18 tests** (Vitest): domain and API contract validation (zod).
-4. **Intelligence Service — 11 tests** (pytest + FastAPI TestClient): mock severity/demand/optimization/RAG providers.
+4. **Intelligence Service — 11 tests** (pytest + FastAPI TestClient): pre-existing mock/scaffold severity/demand/optimization/RAG providers.
 
 A v1 test scenario executes the supported workflow:
 - Admin provisions accounts
 - Field team is created
 - Citizen submits an incident
-- Severity prediction is attempted (falls back to manual triage when AI is unavailable)
+- Severity prediction is optional; when the intelligence scaffold is unavailable, the incident falls back to manual triage (AI/ML model inference is not active in v1)
 - Coordinator manually triages and creates the assignment (manual-assignment flow is authoritative; the AI optimize/recommend/approve workflow is deferred)
 - Field officer records field updates and completes the assignment
 - Incident is resolved once all assignments are complete or cancelled
 - Audit trail is complete
-- RAG answers contain citations
+- RAG (mock/scaffold) answers contain citations
 - Application continues operating
-
-## Design Principles
-
-- **Operational truth lives in the core application** - PostgreSQL/PostGIS
-- **Intelligence is replaceable** - Pluggable providers behind stable contracts
-- **Human operational authority is preserved** - Coordinator always has final say
-- **Failures degrade gracefully** - Service outages don't block core workflows
-- **Security is enforced server-side** - No client-side authorization only
-- **Every important action is traceable** - Audit logging on key operations
-- **Missing data != zero** - Missing values are distinguishable from zero
-- **Model independence** - Frontend and backend don't depend on ML internals
-
-## Project Invariants (Non-Negotiable)
-
-- Roles: `CITIZEN`, `FIELD_OFFICER`, `DISASTER_COORDINATOR`, `ADMINISTRATOR`
-- Accounts are administrator-provisioned
-- One Field Officer leads exactly one Field Team
-- Field Team membership is distinct from authentication identity
-- RAG lives behind authentication and RBAC
-- AI never autonomous_dispatches resources
-- Coordinator review is the operational decision point
-- AI/ML outage must not block incident management
-- Optimization is logically part of Intelligence Service but remains a separate module
-- Original AI recommendations and final human decisions are stored separately
-- PostgreSQL/PostGIS is the operational system of record
-
-## License
-
-Academic project - See repository for license details.
