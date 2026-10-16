@@ -120,6 +120,7 @@ describe('CORS_ORIGIN production fail-safe', () => {
     const res = await request(app)
       .get('/health/version')
       .set('Origin', 'https://ops.example.com')
+      .set('X-Forwarded-Proto', 'https')
     expect(res.status).toBe(200)
     expect(res.headers['access-control-allow-origin']).toBe('https://ops.example.com')
 
@@ -127,6 +128,7 @@ describe('CORS_ORIGIN production fail-safe', () => {
     const denied = await request(app)
       .get('/health/version')
       .set('Origin', 'https://evil.example.com')
+      .set('X-Forwarded-Proto', 'https')
     expect(denied.headers['access-control-allow-origin']).toBeUndefined()
   })
 
@@ -140,11 +142,13 @@ describe('CORS_ORIGIN production fail-safe', () => {
     const a = await request(app)
       .get('/health/version')
       .set('Origin', 'https://ops.example.com')
+      .set('X-Forwarded-Proto', 'https')
     expect(a.headers['access-control-allow-origin']).toBe('https://ops.example.com')
 
     const b = await request(app)
       .get('/health/version')
       .set('Origin', 'https://admin.example.com')
+      .set('X-Forwarded-Proto', 'https')
     expect(b.headers['access-control-allow-origin']).toBe('https://admin.example.com')
   })
 
@@ -158,6 +162,43 @@ describe('CORS_ORIGIN production fail-safe', () => {
       .set('Origin', 'http://localhost:5173')
     expect(res.status).toBe(200)
     expect(res.headers['access-control-allow-origin']).toBe('*')
+  })
+})
+
+describe('HTTPS enforcement (production only)', () => {
+  beforeEach(() => {
+    process.env.NODE_ENV = 'production'
+    process.env.JWT_SECRET = 'prod-test-secret-value-32-chars-min'
+    process.env.CORS_ORIGIN = 'https://ops.example.com'
+  })
+
+  it('redirects plain-HTTP requests to https with 308', async () => {
+    const app = createApp()
+    const res = await request(app)
+      .get('/health/version')
+      .set('Host', 'ops.example.com')
+    expect(res.status).toBe(308)
+    expect(res.headers.location).toBe('https://ops.example.com/health/version')
+  })
+
+  it('allows requests the proxy has already marked secure', async () => {
+    const app = createApp()
+    const res = await request(app)
+      .get('/health/version')
+      .set('Host', 'ops.example.com')
+      .set('X-Forwarded-Proto', 'https')
+    expect(res.status).toBe(200)
+  })
+
+  it('non-production requests are never redirected', async () => {
+    process.env.NODE_ENV = 'test'
+    delete process.env.CORS_ORIGIN
+
+    const app = createApp()
+    const res = await request(app)
+      .get('/health/version')
+      .set('Host', 'localhost:5000')
+    expect(res.status).toBe(200)
   })
 })
 

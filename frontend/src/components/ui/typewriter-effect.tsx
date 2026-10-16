@@ -25,10 +25,9 @@ export function TypewriterEffectSmooth({
   cursorClassName,
 }: TypewriterEffectSmoothProps) {
   const reduceMotion = useReducedMotion()
-  const label = words.map((word) => word.text).join(" ")
 
   return (
-    <div className={cn("flex items-center justify-center gap-x-1", className)} aria-label={label}>
+    <div className={cn("flex items-center justify-center gap-x-1", className)}>
       <motion.div
         initial={reduceMotion ? { width: "fit-content" } : { width: "0%" }}
         whileInView={{ width: "fit-content" }}

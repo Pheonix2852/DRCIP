@@ -1,6 +1,7 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import { Server as HttpServer } from 'http';
 import { verifyToken } from '../lib/auth';
+import prisma from '../lib/prisma';
 
 export interface DRCIPEvent {
   event: string;
@@ -9,11 +10,12 @@ export interface DRCIPEvent {
   data: Record<string, unknown>;
 }
 
-interface WSRequest {
-  url?: string;
-  headers: { host?: string };
-  wsPayload?: { sub: string; role: string };
+interface AuthMessage {
+  type: 'auth';
+  token: string;
 }
+
+type WSMessages = AuthMessage;
 
 interface AuthenticatedWebSocket extends WebSocket {
   userId?: string;
@@ -24,6 +26,9 @@ export class WebSocketService {
   private wss: WebSocketServer;
   private clients: Set<AuthenticatedWebSocket> = new Set();
   private static instance: WebSocketService;
+
+  private readonly AUTH_TIMEOUT_MS = 5000;
+  private readonly CLOSE_CODE_AUTH_REQUIRED = 4001;
 
   static getInstance(server?: HttpServer): WebSocketService {
     if (!WebSocketService.instance) {
@@ -37,41 +42,68 @@ export class WebSocketService {
     this.wss = new WebSocketServer({
       server,
       path: '/ws',
-      verifyClient: this.verifyClient.bind(this),
     });
     this.wss.on('connection', (ws, req) => this.handleConnection(ws, req));
   }
 
-  private async verifyClient(info: { req: WSRequest }, callback: (res: boolean, code?: number, message?: string) => void): Promise<void> {
-    try {
-      const url = new URL(info.req.url || '', `http://${info.req.headers.host || 'localhost'}`);
-      const token = url.searchParams.get('token');
+  private async handleConnection(ws: AuthenticatedWebSocket, _req: { url?: string; headers: { host?: string } }): Promise<void> {
+    let authed = false;
 
-      if (!token) {
-        callback(false, 4001, 'Authentication required');
+    const authTimeout = setTimeout(() => {
+      if (!authed) {
+        ws.close(this.CLOSE_CODE_AUTH_REQUIRED, 'Authentication required');
+      }
+    }, this.AUTH_TIMEOUT_MS);
+
+    const cleanup = () => {
+      clearTimeout(authTimeout);
+      this.clients.delete(ws);
+    };
+
+    ws.on('close', cleanup);
+
+    ws.on('message', async (raw: Buffer) => {
+      if (authed) {
+        // Ignore subsequent messages (server only broadcasts)
         return;
       }
 
-      const payload = await verifyToken(token);
-      if (!payload) {
-        callback(false, 4001, 'Invalid or expired token');
-        return;
+      try {
+        const parsed = JSON.parse(raw.toString());
+        const msg = parsed as WSMessages;
+
+        if (!msg || msg.type !== 'auth' || typeof msg.token !== 'string') {
+          ws.close(this.CLOSE_CODE_AUTH_REQUIRED, 'Invalid auth message');
+          return;
+        }
+
+        const payload = await verifyToken(msg.token);
+        if (!payload) {
+          ws.close(this.CLOSE_CODE_AUTH_REQUIRED, 'Invalid or expired token');
+          return;
+        }
+
+        const session = await prisma.session.findUnique({ where: { publicId: payload.jti } });
+        if (!session || session.revokedAt || session.expiresAt < new Date()) {
+          ws.close(this.CLOSE_CODE_AUTH_REQUIRED, 'Session revoked or expired');
+          return;
+        }
+
+        const user = await prisma.user.findUnique({ where: { id: payload.sub } });
+        if (!user || !user.isActive) {
+          ws.close(this.CLOSE_CODE_AUTH_REQUIRED, 'Account not found or inactive');
+          return;
+        }
+
+        clearTimeout(authTimeout);
+        authed = true;
+        ws.userId = user.id;
+        ws.userRole = user.role;
+        this.clients.add(ws);
+      } catch {
+        ws.close(this.CLOSE_CODE_AUTH_REQUIRED, 'Invalid auth message');
       }
-
-      info.req.wsPayload = { sub: payload.sub, role: payload.role };
-      callback(true);
-    } catch {
-      callback(false, 4001, 'Invalid or expired token');
-    }
-  }
-
-  private handleConnection(ws: AuthenticatedWebSocket, req: WSRequest): void {
-    if (req.wsPayload) {
-      ws.userId = req.wsPayload.sub;
-      ws.userRole = req.wsPayload.role;
-      this.clients.add(ws);
-      ws.on('close', () => this.clients.delete(ws as AuthenticatedWebSocket));
-    }
+    });
   }
 
   broadcast(event: DRCIPEvent) {
@@ -152,15 +184,6 @@ export class WebSocketService {
       version: 1,
       timestamp: new Date().toISOString(),
       data: { team_id: teamId, public_id: publicId, status },
-    });
-  }
-
-  publishIncidentResolved(incidentId: string, publicId: string) {
-    this.broadcast({
-      event: 'incident.resolved',
-      version: 1,
-      timestamp: new Date().toISOString(),
-      data: { incident_id: incidentId, public_id: publicId },
     });
   }
 

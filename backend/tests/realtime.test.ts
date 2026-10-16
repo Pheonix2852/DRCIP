@@ -27,12 +27,15 @@ async function waitForEvent(ws: WebSocket, eventName: string, timeoutMs = 3000):
 }
 
 async function connectWs(token: string): Promise<WebSocket> {
-  const url = `ws://localhost:${(server.address() as { port: number }).port}/ws?token=${token}`
+  const url = `ws://localhost:${(server.address() as { port: number }).port}/ws`
   const ws = new WebSocket(url)
   await new Promise<void>((resolve, reject) => {
     ws.on('open', () => resolve())
     ws.on('error', reject)
   })
+  // Per the WS auth protocol: send the JWT as the first message
+  // (token removed from URL to prevent leaking into access logs/referrers)
+  ws.send(JSON.stringify({ type: 'auth', token }))
   wsClients.push(ws)
   return ws
 }

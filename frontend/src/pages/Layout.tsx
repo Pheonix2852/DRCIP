@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { useRealtime } from "../hooks/useRealtime";
+import { RouteDocumentTitle } from "../components";
 import { notifications } from "../lib/notifications";
 import { cn } from "../lib/utils";
 import { Button } from "./ui/button";
@@ -181,6 +182,7 @@ export function Layout() {
 
   return (
     <div className="flex min-h-screen flex-col bg-surface-cool">
+      <RouteDocumentTitle />
       <a
         href="#main-content"
         className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-drcip-md focus:bg-surface focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-ink focus:shadow-drcip-md"

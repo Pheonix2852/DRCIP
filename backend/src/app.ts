@@ -57,6 +57,27 @@ export function createApp() {
 
   // Middleware
   app.use(requestIdMiddleware);
+
+  // TLS is terminated at the proxy in production. Trust the immediate proxy's
+  // X-Forwarded-* headers, then enforce HTTPS with a permanent redirect for any
+  // request that arrived over plain HTTP. Gated to production so local
+  // development and the test suite keep speaking plain HTTP.
+  if (isProduction) {
+    app.set('trust proxy', 1);
+    app.use((req, res, next) => {
+      if (req.secure) {
+        next();
+        return;
+      }
+      const host = req.headers.host;
+      if (!host) {
+        next();
+        return;
+      }
+      res.redirect(308, `https://${host}${req.originalUrl}`);
+    });
+  }
+
   app.use(cors({
     origin: corsOrigin,
     credentials: true,

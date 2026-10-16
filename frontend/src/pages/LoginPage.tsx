@@ -95,7 +95,11 @@ export function LoginPage() {
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? 'Signing in...' : 'Sign In'}
             </Button>
-            <div className="text-center">
+            <div className="text-center mt-4 text-xs text-text-secondary">
+              <p>By signing in you agree to our&nbsp;
+                <Link to="/terms" className="hover:underline">Terms &amp; Conditions</Link>&nbsp;and&nbsp;
+                <Link to="/privacy" className="hover:underline">Privacy Policy</Link>.
+              </p>
               <Link to="/reset-password" className="text-sm text-muted-foreground hover:underline">
                 Forgot password?
               </Link>

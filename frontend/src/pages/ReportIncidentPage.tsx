@@ -5,11 +5,13 @@ import { Button } from './ui/button'
 import { Card, CardHeader, CardDescription, CardContent } from './ui/card'
 import { Input } from './ui/input'
 import { Label } from './ui/label'
-import { Textarea } from './ui/textarea'
 import { Select } from './ui/select'
-import { incidents, type CreateIncidentRequest } from '../lib/incidents'
+import { Textarea } from './ui/textarea'
+import { incidents } from '../lib/incidents'
 import { MapPanel } from '../components/MapPanel'
 import { FileUpload } from '../components/ui/file-upload'
+import { createIncidentSchema, type CreateIncidentInput } from '@drcip/contracts'
+
 
 const ACCEPT_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'video/mp4', 'video/webm']
 const MAX_FILES = 5
@@ -97,46 +99,55 @@ export function ReportIncidentPage() {
     setLng(newLng)
   }, [])
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError(null)
-    setSuccess(null)
-    setValidationErrors([])
+    const handleSubmit = async (e: React.FormEvent) => {
+      e.preventDefault()
+      setError(null)
+      setSuccess(null)
+      setValidationErrors([])
 
-    if (lat === null || lng === null) {
-      setError('Location is required. Use "Get My Location" or drag the map pin to set the incident location.')
-      return
-    }
+      if (lat === null || lng === null) {
+        setError('Location is required. Use "Get My Location" or drag the map pin to set the incident location.')
+        return
+      }
 
-    const form = e.target as HTMLFormElement
-    const data = new FormData(form)
-    const payload = {
-      disaster_type: data.get('disaster_type') as string,
-      description: data.get('description') as string,
-      latitude: lat,
-      longitude: lng,
-      people_affected: parseInt(data.get('people_affected') as string),
-      emergency_contact_number: data.get('emergency_contact_number') as string,
-    }
-    if (!payload.disaster_type || !payload.description || isNaN(payload.people_affected)) {
-      setError('Please fill in all required fields with valid values.')
-      return
-    }
+      const form = e.target as HTMLFormElement
+      const data = new FormData(form)
+      const rawPayload = {
+        disaster_type: data.get('disaster_type') as string,
+        description: data.get('description') as string,
+        latitude: lat,
+        longitude: lng,
+        people_affected: parseInt(data.get('people_affected') as string),
+        emergency_contact_number: data.get('emergency_contact_number') as string,
+      }
 
-    setSubmitting(true)
-    try {
-      const res = await incidents.create(payload as CreateIncidentRequest)
-      const incidentId = res.incident_id
-      setCreatedIncidentId(incidentId)
-      queryClient.invalidateQueries({ queryKey: ['incidents'] })
-      await uploadMedia(incidentId)
-    } catch (err: unknown) {
-      const axiosError = err as { response?: { data?: { error?: { message?: string } } } }
-      setError(axiosError.response?.data?.error?.message || (err as Error).message || 'Failed to submit incident')
-    } finally {
-      setSubmitting(false)
+      // Validate via shared Zod schema
+      const result = createIncidentSchema.safeParse(rawPayload)
+      if (!result.success) {
+        // Flatten Zod errors into a user-friendly message
+        const issues = result.error.issues
+        const first = issues[0]
+        setError(first?.message ?? 'Invalid input')
+        // Optionally set field-specific errors if UI supports it; for now keep inline.
+        return
+      }
+
+      const payload = result.data as CreateIncidentInput
+
+      setSubmitting(true)
+      try {
+        const res = await incidents.create(payload)
+        const incidentId = res.incident_id
+        setCreatedIncidentId(incidentId)
+        queryClient.invalidateQueries({ queryKey: ['incidents'] })
+        await uploadMedia(incidentId)
+      } catch (err: unknown) {
+        const axiosError = err as { response?: { data?: { error?: { message?: string } } } }
+        setError(axiosError.response?.data?.error?.message || (err as Error).message || 'Failed to submit incident')
+      } finally {
+        setSubmitting(false)
+      }
     }
-  }
 
   const uploadMedia = async (incidentId: string): Promise<void> => {
     const pending = itemsRef.current.filter((i) => i.status === 'ready' || i.status === 'error')

@@ -1,16 +1,21 @@
-import { createHashRouter, createRoutesFromElements, Route } from "react-router-dom";
-import { Layout } from "./pages/Layout";
-import { PublicLayout } from "./pages/PublicLayout";
-import { LoginPage } from "./pages/LoginPage";
-import { HomePage } from "./pages/HomePage";
-import { ResetPasswordPage } from "./pages/ResetPasswordPage";
+import { createHashRouter, createRoutesFromElements, Route } from 'react-router-dom';
+import { Layout } from './pages/Layout';
+import { PublicLayout } from './pages/PublicLayout';
+import { LoginPage } from './pages/LoginPage';
+import { HomePage } from './pages/HomePage';
+import { ResetPasswordPage } from './pages/ResetPasswordPage';
+import { PrivacyPage } from './pages/PrivacyPage';
+import { TermsPage } from './pages/TermsPage';
+import { NotFoundPage } from './pages/NotFoundPage';
+import { PrivateRoute, RoleRoute } from './components';
+import { AuthProvider } from './contexts/AuthContext';
 import {
   ReportIncidentPage,
   MyIncidentsPage,
   IncidentDetailsPage,
   NotificationsPage,
   ProfilePage,
-} from "./pages/pages.shortcuts";
+} from './pages/pages.shortcuts';
 import {
   CoordinatorDashboard,
   FieldOperationsDashboard,
@@ -27,13 +32,12 @@ import {
   FieldUpdatePage,
   UsersPage,
   AuditLogPage,
-} from "./pages/admin.pages";
-import { PrivateRoute, RoleRoute } from "./components";
-import { AuthProvider } from "./contexts/AuthContext";
+} from './pages/admin.pages';
 
 export const router = createHashRouter(
   createRoutesFromElements(
     <>
+      <Route path="*" element={<NotFoundPage />} />
       {/* Public shell — homepage, login and password reset never render the
           authenticated sidebar/header. */}
       <Route
@@ -47,6 +51,8 @@ export const router = createHashRouter(
         <Route index element={<HomePage />} />
         <Route path="login" element={<LoginPage />} />
         <Route path="reset-password" element={<ResetPasswordPage />} />
+        <Route path="privacy" element={<PrivacyPage />} />
+        <Route path="terms" element={<TermsPage />} />
       </Route>
 
       {/* Authenticated shell — URLs and role boundaries unchanged. */}

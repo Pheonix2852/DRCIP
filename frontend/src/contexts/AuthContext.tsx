@@ -83,10 +83,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     setWsStatus(isReconnect ? 'reconnecting' : 'connecting')
     const wsUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:5000/ws'
-    const socket = new WebSocket(`${wsUrl}?token=${storedToken}`)
+    const socket = new WebSocket(wsUrl)
 
     socket.onopen = () => {
       if (!mountedRef.current) return
+      // Send the JWT as the first message instead of the URL query string.
+      // This keeps the token out of server access logs, referrers, and proxies.
+      socket.send(JSON.stringify({ type: 'auth', token: storedToken }))
       setWs(socket)
       setWsStatus('open')
       reconnectDelay.current = INITIAL_RECONNECT_DELAY
@@ -98,11 +101,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       window.dispatchEvent(new CustomEvent('drcip:ws-message', { detail: ev.data }))
     }
 
-    socket.onclose = () => {
+    socket.onclose = (ev) => {
       if (mountedRef.current) {
         setWs(null)
         setWsStatus('closed')
       }
+      // A 4001 close means authentication was rejected by the server
+      // (invalid token, revoked session, or missing auth frame). Do not
+      // reconnect: retries cannot succeed without a fresh token.
+      if (ev?.code === 4001) return
       if (isReconnect || isInitialized) {
         const delay = reconnectDelay.current
         reconnectDelay.current = Math.min(reconnectDelay.current * 2, MAX_RECONNECT_DELAY)

@@ -36,9 +36,25 @@ export function SiteFooter() {
             <li>
               <Link
                 to="/login"
-                className="inline-flex min-h-11 items-center px-1 text-sm font-medium text-text-secondary transition-colors hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cobalt-electric"
+                className="inline-flex min-h-11 items-center px-1 text-sm font-medium text-text-secondary transition-colors hover:text-ink focus-visible:outline-2 focus-visible:offset-2 focus-visible:outline-cobalt-electric"
               >
                 Sign In
+              </Link>
+            </li>
+            <li>
+              <Link
+                to="/privacy"
+                className="inline-flex min-h-11 items-center px-1 text-sm font-medium text-text-secondary transition-colors hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cobalt-electric"
+              >
+                Privacy
+              </Link>
+            </li>
+            <li>
+              <Link
+                to="/terms"
+                className="inline-flex min-h-11 items-center px-1 text-sm font-medium text-text-secondary transition-colors hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cobalt-electric"
+              >
+                Terms
               </Link>
             </li>
           </ul>

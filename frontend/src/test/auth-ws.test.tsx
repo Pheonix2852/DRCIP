@@ -16,6 +16,7 @@ class MockWebSocket {
   onopen: (() => void) | null = null
   onclose: (() => void) | null = null
   onerror: (() => void) | null = null
+  sentMessages: string[] = []
 
   constructor(url: string) {
     this.url = url
@@ -31,7 +32,9 @@ class MockWebSocket {
   }
   addEventListener() {}
   removeEventListener() {}
-  send() {}
+  send(data: string) {
+    this.sentMessages.push(data)
+  }
 }
 
 function Consumer() {
@@ -79,7 +82,9 @@ describe('AuthContext WebSocket registration under StrictMode', () => {
     renderProvider()
     await waitFor(() => expect(screen.getByTestId('status').textContent).toBe('open:yes'))
     expect(MockWebSocket.instances).toHaveLength(1)
-    expect(MockWebSocket.instances[0].url).toContain('token=test-token')
+    // Token is sent as the first message (NOT in the URL query string)
+    const sent = MockWebSocket.instances[0].sentMessages.map((m) => JSON.parse(m))
+    expect(sent.find((m) => m.type === 'auth' && m.token === 'test-token')).toBeTruthy()
   })
 
   it('auto-reconnects when the socket closes (self-recovery)', async () => {
@@ -89,5 +94,9 @@ describe('AuthContext WebSocket registration under StrictMode', () => {
     first.close()
     await waitFor(() => expect(MockWebSocket.instances.length).toBeGreaterThanOrEqual(2), { timeout: 3000 })
     await waitFor(() => expect(screen.getByTestId('status').textContent).toBe('open:yes'), { timeout: 3000 })
+    // Ensure the new instance sent an auth frame
+    const second = MockWebSocket.instances[1]
+    const sent = second.sentMessages.map((m) => JSON.parse(m))
+    expect(sent.find((m) => m.type === 'auth' && m.token === 'test-token')).toBeTruthy()
   })
 })
