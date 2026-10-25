@@ -2,7 +2,6 @@
 
 A full-stack disaster-response coordination platform that coordinates incident reporting, situational awareness, resource management, decision support, field execution, notifications, operational knowledge, and reporting.
 
-DRCIP v1 is the non-AI operational release: the core platform runs independently of AI/ML model inference. AI/ML model development was stopped and the post-baseline AI/ML implementation/research work was removed from the v1 tree. The pre-existing `intelligence-service` mock/scaffold remains intentionally — it predates that work and is not the active v1 AI/ML implementation.
 
 ## Architecture
 
@@ -81,9 +80,14 @@ shared/contracts/  - Shared TypeScript types and domain contracts
    ```
 
 4. **Access the application**
-   - Frontend: http://localhost:5173
-   - Backend API: http://localhost:5000
-   - Intelligence Service (optional mock/scaffold): http://localhost:8000
+   - Local frontend: http://localhost:5173
+   - Local backend API: http://localhost:5000
+   - Local intelligence service (optional mock/scaffold): http://localhost:8000
+
+   Deployed v1 environment:
+   - Frontend: https://drcip.pages.dev
+   - Backend/API: https://drcip.onrender.com
+   - Database: NeonDB (PostgreSQL/PostGIS)
 
 ## Project Structure
 
