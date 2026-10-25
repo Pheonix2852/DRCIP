@@ -9,6 +9,7 @@ import {
   createAssignmentSchema,
   incidentQuerySchema,
   triageSchema,
+  ragQuerySchema,
   severityLevelSchema,
   resourceTypeSchema,
   shelterStatusSchema,
@@ -146,6 +147,18 @@ describe('shared/contracts zod schemas', () => {
     it('triageSchema requires a confirmed severity', () => {
       expect(triageSchema.safeParse({ confirmed_severity: 'HIGH' }).success).toBe(true)
       expect(triageSchema.safeParse({ notes: 'no severity' }).success).toBe(false)
+    })
+
+    it('ragQuerySchema accepts a trimmed question and optional incident', () => {
+      const parsed = ragQuerySchema.parse({ query: '  What now?  ', incident_id: 'INC-1' })
+      expect(parsed.query).toBe('What now?')
+      expect(parsed.incident_id).toBe('INC-1')
+    })
+
+    it('ragQuerySchema rejects empty, oversized and unknown input', () => {
+      expect(ragQuerySchema.safeParse({ query: '   ' }).success).toBe(false)
+      expect(ragQuerySchema.safeParse({ query: 'x'.repeat(2001) }).success).toBe(false)
+      expect(ragQuerySchema.safeParse({ query: 'ok', model: 'attacker' }).success).toBe(false)
     })
   })
 })

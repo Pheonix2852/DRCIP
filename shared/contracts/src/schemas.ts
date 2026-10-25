@@ -521,3 +521,21 @@ export const reportAnalyticsQuerySchema = z.object({
 });
 
 export type ReportAnalyticsQueryInput = z.infer<typeof reportAnalyticsQuerySchema>;
+
+// ---------------------------------------------------------------------------
+// RAG 1.0 — approved-document query
+// See docs/05_API_Contract.md §14
+// ---------------------------------------------------------------------------
+
+export const ragQuerySchema = z
+  .object({
+    query: z
+      .string()
+      .trim()
+      .min(1, 'Query must not be empty')
+      .max(2000, 'Query must be at most 2000 characters'),
+    incident_id: z.string().trim().min(1).max(100).optional(),
+  })
+  .strict();
+
+export type RagQueryInput = z.infer<typeof ragQuerySchema>;

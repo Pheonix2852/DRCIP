@@ -267,16 +267,18 @@ export interface RagQueryRequest {
   incident_id?: string;
 }
 
+export interface RagCitation {
+  document_id?: string;
+  title: string;
+  page?: number;
+  section?: string;
+  source_organization?: string;
+}
+
 export interface RagQueryResponse {
   status: RagResponseStatus;
   answer: string;
-  citations: {
-    document_id: string;
-    title: string;
-    page?: number;
-    section?: string;
-    source_organization?: string;
-  }[];
+  citations: RagCitation[];
   tool_calls: unknown[];
   rag_version: string;
 }

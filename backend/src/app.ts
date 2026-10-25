@@ -23,6 +23,7 @@ import reportsRouter from './routes/reports';
 import { healthRouter } from './routes/health';
 import weatherRouter from './routes/weather';
 import adminRouter from './routes/admin';
+import ragRouter from './routes/rag';
 
 export function createApp() {
   const app = express();
@@ -110,6 +111,7 @@ export function createApp() {
   app.use('/api/v1/audit-logs', verifyAuth, auditRouter);
   app.use('/api/v1/weather', verifyAuth, weatherRouter);
   app.use('/api/v1/admin', verifyAuth, adminRouter);
+  app.use('/api/v1/rag', verifyAuth, ragRouter);
 
   // 404 handler
   app.use(notFoundHandler);

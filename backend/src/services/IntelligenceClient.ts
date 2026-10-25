@@ -2,7 +2,6 @@ import axios from 'axios';
 import { SeverityPredictionRequest, SeverityPredictionResponse } from '@drcip/contracts';
 import { DemandForecastRequest, DemandForecastResponse } from '@drcip/contracts';
 import { OptimizationRequest, OptimizationResponse } from '@drcip/contracts';
-import { RagQueryRequest, RagQueryResponse } from '@drcip/contracts';
 
 export class IntelligenceClient {
   private baseUrl: string;
@@ -74,27 +73,6 @@ export class IntelligenceClient {
           generated_at: new Date().toISOString(),
           error_code: 'OPTIMIZATION_SERVICE_UNAVAILABLE',
           message: 'Optimization service is currently unavailable',
-        };
-      }
-      throw err;
-    }
-  }
-
-  async queryRag(request: RagQueryRequest): Promise<RagQueryResponse> {
-    try {
-      const response = await axios.post(`${this.baseUrl}/internal/v1/rag/query`, request, {
-        timeout: 15000,
-      });
-      return response.data;
-    } catch (err: unknown) {
-      const axiosError = err as { code?: string; response?: { status?: number } };
-      if (axiosError.code === 'ECONNREFUSED' || axiosError.code === 'ECONNABORTED' || (axiosError.response?.status && axiosError.response.status >= 500)) {
-        return {
-          status: 'UNAVAILABLE',
-          answer: 'RAG service is temporarily unavailable. Please try again later.',
-          citations: [],
-          tool_calls: [],
-          rag_version: 'unavailable',
         };
       }
       throw err;
