@@ -15,10 +15,10 @@ vi.mock('../lib/admin', () => ({
       shelters: { total: 2 },
       health: { status: 'ok', timestamp: '2026-09-27T12:00:00Z' },
       rag: {
-        status: 'deferred',
-        documents_total: 0,
+        status: 'AVAILABLE',
+        documents_total: 2,
         documents_pending_approval: 0,
-        message: 'RAG implementation is deferred.',
+        message: 'RAG 1.0 document guidance is available.',
       },
       configuration: { status: 'ok', message: 'Core services operational.' },
       recent_audit: [],

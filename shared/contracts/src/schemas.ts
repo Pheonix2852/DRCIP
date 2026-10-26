@@ -532,8 +532,8 @@ export const ragQuerySchema = z
     query: z
       .string()
       .trim()
-      .min(1, 'Query must not be empty')
-      .max(2000, 'Query must be at most 2000 characters'),
+      .min(3, 'Query must be at least 3 characters')
+      .max(500, 'Query must be at most 500 characters'),
     incident_id: z.string().trim().min(1).max(100).optional(),
   })
   .strict();

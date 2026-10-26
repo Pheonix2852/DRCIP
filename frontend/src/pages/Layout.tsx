@@ -99,7 +99,7 @@ const NAV_GROUPS: NavGroup[] = [
       {
         label: "RAG Assistant",
         to: "/rag",
-        roles: ["FIELD_OFFICER", "DISASTER_COORDINATOR", "ADMINISTRATOR"],
+        roles: ["CITIZEN", "FIELD_OFFICER", "DISASTER_COORDINATOR", "ADMINISTRATOR"],
         // The Administrator RAG surface lives at /admin/rag.
         activePrefixes: ["/admin/rag"],
         icon: Bot,

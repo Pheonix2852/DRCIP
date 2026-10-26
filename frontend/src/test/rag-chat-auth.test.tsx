@@ -1,47 +1,53 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 
-const authState = { role: null as string | null }
+const authState = { authenticated: true }
 
 vi.mock('../contexts/AuthContext', () => ({
   useAuth: () => ({
-    isAuthenticated: true,
+    isAuthenticated: authState.authenticated,
     isInitialized: true,
-    hasRole: (roles: string[]) => !!authState.role && roles.includes(authState.role),
   }),
 }))
 
 import { RAGChatPage } from '../pages/RAGChatPage'
-import { RoleRoute } from '../components/RoleRoute'
+import { PrivateRoute } from '../components/PrivateRoute'
 
 afterEach(() => cleanup())
 
-function renderRagGuard() {
+function renderRagRoute() {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
-    <MemoryRouter initialEntries={['/rag']}>
-      <Routes>
-        <Route path="/" element={<div>Public home</div>} />
-        <Route element={<RoleRoute allowedRoles={['FIELD_OFFICER', 'DISASTER_COORDINATOR', 'ADMINISTRATOR']} />}>
-          <Route path="/rag" element={<RAGChatPage />} />
-        </Route>
-      </Routes>
-    </MemoryRouter>,
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter initialEntries={['/rag']}>
+        <Routes>
+          <Route path="/login" element={<div>Sign in required</div>} />
+          <Route element={<PrivateRoute />}>
+            <Route path="/rag" element={<RAGChatPage />} />
+          </Route>
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
   )
 }
 
 describe('RAGChatPage authorization', () => {
-  it('renders the deferred RAG surface for an authorized role', () => {
-    authState.role = 'DISASTER_COORDINATOR'
-    renderRagGuard()
-    expect(screen.getByText('RAG Assistant')).toBeTruthy()
-    expect(screen.getByRole('status').textContent).toContain('RAG')
-  })
+  it.each(['CITIZEN', 'FIELD_OFFICER', 'DISASTER_COORDINATOR', 'ADMINISTRATOR'])(
+    'renders the RAG assistant for %s',
+    () => {
+      authState.authenticated = true
+      renderRagRoute()
+      expect(screen.getByRole('heading', { name: 'RAG Assistant' })).toBeTruthy()
+      expect(screen.getByLabelText('Your question')).toBeTruthy()
+    },
+  )
 
-  it('denies a Citizen (redirects away from the RAG surface)', () => {
-    authState.role = 'CITIZEN'
-    renderRagGuard()
-    expect(screen.queryByText('RAG Assistant')).toBeNull()
-    expect(screen.getByText('Public home')).toBeTruthy()
+  it('redirects an unauthenticated user to login', () => {
+    authState.authenticated = false
+    renderRagRoute()
+    expect(screen.getByText('Sign in required')).toBeTruthy()
+    expect(screen.queryByRole('heading', { name: 'RAG Assistant' })).toBeNull()
   })
 })

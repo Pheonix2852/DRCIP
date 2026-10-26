@@ -108,14 +108,38 @@ describe('POST /api/v1/rag/query validation', () => {
     expect(queryMock).not.toHaveBeenCalled();
   });
 
-  it('rejects a blank query', async () => {
+  it('rejects queries shorter than 3 characters', async () => {
+    for (const query of ['   ', 'ok']) {
+      const res = await request(testApp)
+        .post('/api/v1/rag/query')
+        .set(authHeader(citizenToken))
+        .send({ query });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_ERROR');
+    }
+    expect(queryMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects queries longer than 500 characters', async () => {
     const res = await request(testApp)
       .post('/api/v1/rag/query')
       .set(authHeader(citizenToken))
-      .send({ query: '   ' });
+      .send({ query: 'x'.repeat(501) });
 
     expect(res.status).toBe(400);
     expect(res.body.error.code).toBe('VALIDATION_ERROR');
+    expect(queryMock).not.toHaveBeenCalled();
+  });
+
+  it('accepts a query at the 500 character limit', async () => {
+    const res = await request(testApp)
+      .post('/api/v1/rag/query')
+      .set(authHeader(citizenToken))
+      .send({ query: 'x'.repeat(500) });
+
+    expect(res.status).toBe(200);
+    expect(queryMock).toHaveBeenCalledTimes(1);
   });
 
   it('rejects unexpected fields', async () => {

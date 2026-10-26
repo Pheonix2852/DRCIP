@@ -51,4 +51,25 @@ test.describe('authentication', () => {
     await expect(page).toHaveURL(/#\/admin/);
     await expect(page.getByRole('heading', { name: /Admin Dashboard/i })).toBeVisible();
   });
+
+  test('admin can submit a question to the RAG assistant', async ({ page }) => {
+    test.skip(!ADMIN_PASSWORD, 'E2E_ADMIN_PASSWORD not set');
+    test.setTimeout(90000);
+    await page.goto('/#/login');
+    await page.getByLabel('Email').fill(ADMIN_EMAIL);
+    await page.getByLabel('Password').fill(ADMIN_PASSWORD as string);
+    await page.getByRole('button', { name: 'Sign In' }).click();
+    await expect(page).toHaveURL(/#\/admin/);
+
+    await page.goto('/#/rag');
+    await expect(page.getByRole('heading', { name: 'RAG Assistant' })).toBeVisible();
+    await page
+      .getByLabel('Your question')
+      .fill('What should a field team check before evacuating a flooded area?');
+    await page.getByRole('button', { name: 'Send' }).click();
+
+    await expect(
+      page.locator('[data-testid="rag-response"], [data-testid="rag-error"]'),
+    ).toBeVisible({ timeout: 70000 });
+  });
 });

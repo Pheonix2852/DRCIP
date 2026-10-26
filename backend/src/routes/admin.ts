@@ -60,10 +60,10 @@ router.get('/overview', requireRole('ADMINISTRATOR'), async (req: AppRequest, re
           timestamp: new Date().toISOString(),
         },
         rag: {
-          status: 'deferred',
+          status: 'AVAILABLE',
           documents_total: knowledgeDocCount,
           documents_pending_approval: pendingDocCount,
-          message: 'RAG implementation is deferred.',
+          message: 'RAG 1.0 document guidance is available.',
         },
         configuration: {
           status: 'ok',

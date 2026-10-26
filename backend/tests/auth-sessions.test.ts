@@ -416,7 +416,7 @@ describe('Admin overview and leader-candidates', () => {
     expect(res.body.data.users).toBeDefined()
     expect(res.body.data.users.total).toBeGreaterThanOrEqual(1)
     expect(res.body.data.users.active).toBeGreaterThanOrEqual(1)
-    expect(res.body.data.rag.status).toBe('deferred')
+    expect(res.body.data.rag.status).toBe('AVAILABLE')
     expect(res.body.data.configuration.status).toBe('ok')
   })
 

@@ -70,6 +70,7 @@ export const router = createHashRouter(
           <Route path="incidents/:id" element={<IncidentDetailsPage />} />
           <Route path="notifications" element={<NotificationsPage />} />
           <Route path="profile" element={<ProfilePage />} />
+          <Route path="rag" element={<RAGChatPage />} />
 
           <Route element={<RoleRoute allowedRoles={["DISASTER_COORDINATOR", "ADMINISTRATOR"]} />}>
             <Route path="dashboard" element={<CoordinatorDashboard />} />
@@ -93,10 +94,6 @@ export const router = createHashRouter(
 
           <Route element={<RoleRoute allowedRoles={["FIELD_OFFICER", "DISASTER_COORDINATOR", "ADMINISTRATOR"]} />}>
             <Route path="resources" element={<ResourcesPage />} />
-          </Route>
-
-          <Route element={<RoleRoute allowedRoles={["FIELD_OFFICER", "DISASTER_COORDINATOR", "ADMINISTRATOR"]} />}>
-            <Route path="rag" element={<RAGChatPage />} />
           </Route>
 
           <Route element={<RoleRoute allowedRoles={["FIELD_OFFICER"]} />}>

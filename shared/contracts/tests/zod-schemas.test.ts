@@ -155,10 +155,12 @@ describe('shared/contracts zod schemas', () => {
       expect(parsed.incident_id).toBe('INC-1')
     })
 
-    it('ragQuerySchema rejects empty, oversized and unknown input', () => {
+    it('ragQuerySchema enforces the hosted provider 3-500 character range', () => {
       expect(ragQuerySchema.safeParse({ query: '   ' }).success).toBe(false)
-      expect(ragQuerySchema.safeParse({ query: 'x'.repeat(2001) }).success).toBe(false)
-      expect(ragQuerySchema.safeParse({ query: 'ok', model: 'attacker' }).success).toBe(false)
+      expect(ragQuerySchema.safeParse({ query: 'ok' }).success).toBe(false)
+      expect(ragQuerySchema.safeParse({ query: 'x'.repeat(500) }).success).toBe(true)
+      expect(ragQuerySchema.safeParse({ query: 'x'.repeat(501) }).success).toBe(false)
+      expect(ragQuerySchema.safeParse({ query: 'okay', model: 'attacker' }).success).toBe(false)
     })
   })
 })

@@ -164,7 +164,7 @@ export function FieldOperationsDashboard() {
                 <CardTitle className="text-base">RAG Assistant</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-xs text-muted-foreground mb-2">Disaster intelligence (deferred).</p>
+                <p className="text-xs text-muted-foreground mb-2">Ask about approved disaster-response guidance.</p>
                 <Link to="/rag" className="inline-block">
                   <Button variant="outline" size="sm">Open RAG</Button>
                 </Link>

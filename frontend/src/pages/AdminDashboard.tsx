@@ -106,8 +106,9 @@ export function AdminDashboard() {
             <CardTitle className="text-base">RAG Document Approval</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-sm px-3 py-2 rounded-drcip-md bg-status-warning/10 text-status-warning" role="status">
-              RAG implementation is deferred.
+            <div className="flex items-center gap-2" role="status">
+              <StatusBadge status={data.rag.status} />
+              <span className="text-xs text-muted">{data.rag.message}</span>
             </div>
             <p className="text-xs text-muted mt-2">
               {data.rag.documents_total} document(s) indexed · {data.rag.documents_pending_approval} pending approval
