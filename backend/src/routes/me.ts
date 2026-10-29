@@ -4,7 +4,7 @@ import { requireRole } from '../middleware/auth';
 import prisma from '../lib/prisma';
 import { hashPassword, verifyPassword, isPasswordValid } from '../lib/auth';
 import { teamInclude, serializeTeam } from '../lib/teamSerializer';
-import { queryAssignments } from '../lib/assignmentSerializer';
+import { queryAssignments, assignmentAccessScope } from '../lib/assignmentSerializer';
 import { assignmentQuerySchema } from '@drcip/contracts';
 
 const router = Router();
@@ -150,7 +150,10 @@ router.get('/team', requireRole('FIELD_OFFICER'), async (req: AppRequest, res, n
 router.get('/assignments', requireRole('FIELD_OFFICER'), async (req: AppRequest, res, next) => {
   try {
     const query = assignmentQuerySchema.parse(req.query);
-    const data = await queryAssignments({ userId: req.userId!, role: req.userRole!, query });
+    const data = await queryAssignments({
+      scope: assignmentAccessScope(req.userRole!, req.userId!),
+      query,
+    });
     res.json({ success: true, data });
   } catch (err) {
     next(err);

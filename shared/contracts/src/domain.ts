@@ -203,6 +203,42 @@ export const RAG_RESPONSE_STATUSES = {
 
 export type RagResponseStatus = (typeof RAG_RESPONSE_STATUSES)[keyof typeof RAG_RESPONSE_STATUSES];
 
+export const RAG_TOOL_NAMES = {
+  GET_ACTIVE_INCIDENTS: 'get_active_incidents',
+  GET_NEARBY_AMBULANCES: 'get_nearby_ambulances',
+  GET_AVAILABLE_RESCUE_TEAMS: 'get_available_rescue_teams',
+  GET_SHELTER_CAPACITY: 'get_shelter_capacity',
+  GET_RESOURCE_STOCK: 'get_resource_stock',
+  GET_CURRENT_ASSIGNMENTS: 'get_current_assignments',
+} as const;
+
+export type RagToolName = (typeof RAG_TOOL_NAMES)[keyof typeof RAG_TOOL_NAMES];
+
+export const RAG_TOOL_OUTCOMES = {
+  SUCCESS: 'SUCCESS',
+  EMPTY: 'EMPTY',
+  UNAVAILABLE: 'UNAVAILABLE',
+  ERROR: 'ERROR',
+} as const;
+
+export type RagToolOutcome = (typeof RAG_TOOL_OUTCOMES)[keyof typeof RAG_TOOL_OUTCOMES];
+
+export const RAG_TOOL_LIMITS = {
+  MAX_CALLS_PER_TURN: 4,
+  DEFAULT_RESULT_LIMIT: 10,
+  MAX_RESULT_LIMIT: 50,
+  MAX_RADIUS_KM: 100,
+} as const;
+
+export const RAG_TOOL_ALLOWED_ROLES: Record<RagToolName, readonly Role[]> = {
+  get_active_incidents: [ROLES.FIELD_OFFICER, ROLES.DISASTER_COORDINATOR, ROLES.ADMINISTRATOR],
+  get_nearby_ambulances: [ROLES.FIELD_OFFICER, ROLES.DISASTER_COORDINATOR, ROLES.ADMINISTRATOR],
+  get_available_rescue_teams: [ROLES.FIELD_OFFICER, ROLES.DISASTER_COORDINATOR, ROLES.ADMINISTRATOR],
+  get_shelter_capacity: [ROLES.FIELD_OFFICER, ROLES.DISASTER_COORDINATOR, ROLES.ADMINISTRATOR],
+  get_resource_stock: [ROLES.DISASTER_COORDINATOR, ROLES.ADMINISTRATOR],
+  get_current_assignments: [ROLES.FIELD_OFFICER, ROLES.DISASTER_COORDINATOR, ROLES.ADMINISTRATOR],
+};
+
 export const MEDIA_TYPES = {
   IMAGE: 'IMAGE',
   VIDEO: 'VIDEO',

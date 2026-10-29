@@ -9,6 +9,7 @@ import { WebSocketService } from '../services/WebSocketService';
 import { NotificationService, type CreatedNotification } from '../services/NotificationService';
 import { IntelligenceClient } from '../services/IntelligenceClient';
 import { publicId } from '../lib/publicId';
+import { queryIncidentList } from '../lib/domainQueries';
 
 const intelligence = new IntelligenceClient();
 
@@ -171,71 +172,14 @@ router.get('/', async (req: AppRequest, res, next) => {
     // it is read and filtered here. The value is a zone public id.
     const responseZoneId = typeof req.query.response_zone_id === 'string' ? req.query.response_zone_id.trim() : '';
 
-    const offset = (query.page - 1) * query.limit;
-
-    // Use raw SQL to extract lat/lng from geography column
-    const incidents = await prisma.$queryRaw<{
-      id: string;
-      publicId: string;
-      disasterType: string;
-      description: string;
-      peopleAffected: number;
-      emergencyContactNumber: string;
-      latitude: number | null;
-      longitude: number | null;
-      addressText: string | null;
-      state: string | null;
-      district: string | null;
-      responseZonePublicId: string | null;
-      predictedSeverity: string | null;
-      confirmedSeverity: string | null;
-      status: string;
-      createdAt: Date;
-      updatedAt: Date;
-    }[]>`
-      SELECT
-        i.id,
-        i."publicId",
-        i."disasterType",
-        i.description,
-        i."peopleAffected",
-        i."emergencyContactNumber",
-        ST_Y(i."location"::geometry)::float AS latitude,
-        ST_X(i."location"::geometry)::float AS longitude,
-        i."addressText",
-        i.state,
-        i.district,
-        rz."publicId" AS "responseZonePublicId",
-        i."predictedSeverity",
-        i."confirmedSeverity",
-        i.status,
-        i."createdAt",
-        i."updatedAt"
-      FROM "Incident" i
-      LEFT JOIN "ResponseZone" rz ON i."responseZoneId" = rz.id
-      WHERE ${req.userRole === 'CITIZEN' ? Prisma.sql`i."reporterUserId" = ${req.userId}` : Prisma.sql`TRUE`}
-        ${query.status ? Prisma.sql`AND i.status = ${query.status}::"IncidentStatus"` : Prisma.empty}
-        ${query.disaster_type ? Prisma.sql`AND i."disasterType" = ${query.disaster_type}::"DisasterType"` : Prisma.empty}
-        ${query.severity ? Prisma.sql`AND i."confirmedSeverity" = ${query.severity}::"SeverityLevel"` : Prisma.empty}
-        ${query.search ? Prisma.sql`AND (i.description ILIKE ${`%${query.search}%`} OR i."publicId" ILIKE ${`%${query.search}%`})` : Prisma.empty}
-        ${responseZoneId ? Prisma.sql`AND rz."publicId" = ${responseZoneId}` : Prisma.empty}
-      ORDER BY i."createdAt" ${query.sort === 'oldest' ? Prisma.sql`ASC` : Prisma.sql`DESC`}
-      LIMIT ${query.limit} OFFSET ${offset}
-    `;
-
-    const totalResult = await prisma.$queryRaw<{ count: bigint }[]>`
-      SELECT COUNT(*)::bigint AS count
-      FROM "Incident" i
-      WHERE ${req.userRole === 'CITIZEN' ? Prisma.sql`i."reporterUserId" = ${req.userId}` : Prisma.sql`TRUE`}
-        ${query.status ? Prisma.sql`AND i.status = ${query.status}::"IncidentStatus"` : Prisma.empty}
-        ${query.disaster_type ? Prisma.sql`AND i."disasterType" = ${query.disaster_type}::"DisasterType"` : Prisma.empty}
-        ${query.severity ? Prisma.sql`AND i."confirmedSeverity" = ${query.severity}::"SeverityLevel"` : Prisma.empty}
-        ${query.search ? Prisma.sql`AND (i.description ILIKE ${`%${query.search}%`} OR i."publicId" ILIKE ${`%${query.search}%`})` : Prisma.empty}
-        ${responseZoneId
-          ? Prisma.sql`AND EXISTS (SELECT 1 FROM "ResponseZone" rz WHERE rz.id = i."responseZoneId" AND rz."publicId" = ${responseZoneId})`
-          : Prisma.empty}
-    `;
-    const total = Number(totalResult[0]?.count ?? 0);
+    const { items: incidents, total } = await queryIncidentList({
+      scope:
+        req.userRole === 'CITIZEN'
+          ? { kind: 'REPORTER', userId: req.userId! }
+          : { kind: 'ALL' },
+      query,
+      responseZoneId,
+    });
 
     res.json({
       success: true,

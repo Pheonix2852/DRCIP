@@ -17,6 +17,9 @@ import {
   NOTIFICATION_TYPES,
   NOTIFICATION_PRIORITIES,
   RECIPIENT_SCOPES,
+  RAG_TOOL_NAMES,
+  RAG_TOOL_OUTCOMES,
+  RAG_TOOL_LIMITS,
 } from './domain';
 
 // Keep tuple types literal so z.enum infers the exact union, not `string`.
@@ -539,3 +542,242 @@ export const ragQuerySchema = z
   .strict();
 
 export type RagQueryInput = z.infer<typeof ragQuerySchema>;
+
+// ---------------------------------------------------------------------------
+// RAG 2.0 live-tool contract (frozen; tools are not implemented in v1)
+// See docs/05_API_Contract.md #14 and docs/02_Functional_Specification.md #12
+// ---------------------------------------------------------------------------
+
+const RAG_TOOL_NAME_VALUES = Object.values(RAG_TOOL_NAMES) as [
+  (typeof RAG_TOOL_NAMES)[keyof typeof RAG_TOOL_NAMES],
+  ...(typeof RAG_TOOL_NAMES)[keyof typeof RAG_TOOL_NAMES][],
+];
+const RAG_TOOL_OUTCOME_VALUES = Object.values(RAG_TOOL_OUTCOMES) as [
+  (typeof RAG_TOOL_OUTCOMES)[keyof typeof RAG_TOOL_OUTCOMES],
+  ...(typeof RAG_TOOL_OUTCOMES)[keyof typeof RAG_TOOL_OUTCOMES][],
+];
+
+export const ragToolNameSchema = z.enum(RAG_TOOL_NAME_VALUES);
+export const ragToolOutcomeSchema = z.enum(RAG_TOOL_OUTCOME_VALUES);
+
+export const activeIncidentStatusSchema = z.enum(['REPORTED', 'TRIAGE_PENDING', 'IN_RESPONSE']);
+
+const ragLimitSchema = z
+  .number()
+  .int()
+  .min(1)
+  .max(RAG_TOOL_LIMITS.MAX_RESULT_LIMIT)
+  .default(RAG_TOOL_LIMITS.DEFAULT_RESULT_LIMIT);
+
+const ragRadiusSchema = z.number().positive().max(RAG_TOOL_LIMITS.MAX_RADIUS_KM);
+const ragIdSchema = z.string().trim().min(1).max(100);
+const ragCapabilitySchema = z.string().trim().min(1).max(100);
+
+function hasCompleteRagNearby(data: {
+  latitude?: number;
+  longitude?: number;
+  radius_km?: number;
+}) {
+  const provided = [data.latitude, data.longitude, data.radius_km].filter(
+    (value) => value !== undefined,
+  ).length;
+  return provided === 0 || provided === 3;
+}
+
+export const getActiveIncidentsArgsSchema = z
+  .object({
+    status: activeIncidentStatusSchema.optional(),
+    disaster_type: disasterTypeSchema.optional(),
+    severity: severityLevelSchema.optional(),
+    latitude: latSchema.optional(),
+    longitude: lngSchema.optional(),
+    radius_km: ragRadiusSchema.optional(),
+    limit: ragLimitSchema,
+  })
+  .strict()
+  .refine(hasCompleteRagNearby, {
+    message: 'latitude, longitude and radius_km must be provided together',
+  });
+
+export const getNearbyAmbulancesArgsSchema = z
+  .object({
+    latitude: latSchema,
+    longitude: lngSchema,
+    radius_km: ragRadiusSchema,
+    status: resourceStatusSchema.optional(),
+    limit: ragLimitSchema,
+  })
+  .strict();
+
+export const getAvailableRescueTeamsArgsSchema = z
+  .object({
+    capability: ragCapabilitySchema.optional(),
+    limit: ragLimitSchema,
+  })
+  .strict();
+
+export const getShelterCapacityArgsSchema = z
+  .object({
+    status: shelterStatusSchema.optional(),
+    min_available_capacity: z.number().int().min(0).optional(),
+    latitude: latSchema.optional(),
+    longitude: lngSchema.optional(),
+    radius_km: ragRadiusSchema.optional(),
+    limit: ragLimitSchema,
+  })
+  .strict()
+  .refine(hasCompleteRagNearby, {
+    message: 'latitude, longitude and radius_km must be provided together',
+  });
+
+export const getResourceStockArgsSchema = z
+  .object({
+    resource_type: resourceTypeSchema.optional(),
+    status: resourceStatusSchema.optional(),
+    latitude: latSchema.optional(),
+    longitude: lngSchema.optional(),
+    radius_km: ragRadiusSchema.optional(),
+    limit: ragLimitSchema,
+  })
+  .strict()
+  .refine(hasCompleteRagNearby, {
+    message: 'latitude, longitude and radius_km must be provided together',
+  });
+
+export const getCurrentAssignmentsArgsSchema = z
+  .object({
+    incident_id: ragIdSchema.optional(),
+    status: assignmentStatusSchema.optional(),
+    limit: ragLimitSchema,
+  })
+  .strict();
+
+export const ragToolArgumentSchemas = {
+  get_active_incidents: getActiveIncidentsArgsSchema,
+  get_nearby_ambulances: getNearbyAmbulancesArgsSchema,
+  get_available_rescue_teams: getAvailableRescueTeamsArgsSchema,
+  get_shelter_capacity: getShelterCapacityArgsSchema,
+  get_resource_stock: getResourceStockArgsSchema,
+  get_current_assignments: getCurrentAssignmentsArgsSchema,
+} as const;
+
+export const ragToolInvocationSchema = z.union([
+  z.object({ tool: z.literal('get_active_incidents'), arguments: getActiveIncidentsArgsSchema }).strict(),
+  z.object({ tool: z.literal('get_nearby_ambulances'), arguments: getNearbyAmbulancesArgsSchema }).strict(),
+  z.object({ tool: z.literal('get_available_rescue_teams'), arguments: getAvailableRescueTeamsArgsSchema }).strict(),
+  z.object({ tool: z.literal('get_shelter_capacity'), arguments: getShelterCapacityArgsSchema }).strict(),
+  z.object({ tool: z.literal('get_resource_stock'), arguments: getResourceStockArgsSchema }).strict(),
+  z.object({ tool: z.literal('get_current_assignments'), arguments: getCurrentAssignmentsArgsSchema }).strict(),
+]);
+
+export const ragToolCallSchema = z
+  .object({
+    tool: ragToolNameSchema,
+    outcome: ragToolOutcomeSchema,
+    as_of: z.string().datetime(),
+    returned_count: z.number().int().min(0),
+    truncated: z.boolean(),
+  })
+  .strict();
+
+export const ragLiveEvidenceSchema = ragToolCallSchema
+  .extend({
+    evidence_type: z.literal('LIVE_OPERATIONAL_DATA'),
+  })
+  .strict();
+
+const ragCapabilityProfileSchema = z.record(z.unknown());
+
+export const ragIncidentRecordSchema = z
+  .object({
+    incident_id: z.string(),
+    disaster_type: disasterTypeSchema,
+    description: z.string(),
+    status: incidentStatusSchema,
+    confirmed_severity: severityLevelSchema.nullable(),
+    predicted_severity: severityLevelSchema.nullable(),
+    people_affected: z.number().int().min(0),
+    latitude: z.number().nullable(),
+    longitude: z.number().nullable(),
+    address_text: z.string().nullable(),
+    state: z.string().nullable(),
+    district: z.string().nullable(),
+    response_zone_id: z.string().nullable(),
+    created_at: z.string().datetime(),
+    updated_at: z.string().datetime(),
+  })
+  .strict();
+
+export const ragResourceRecordSchema = z
+  .object({
+    resource_id: z.string(),
+    resource_type: resourceTypeSchema,
+    name: z.string(),
+    status: resourceStatusSchema,
+    quantity: z.number(),
+    unit: z.string().nullable(),
+    capacity: z.number().nullable(),
+    latitude: z.number().nullable(),
+    longitude: z.number().nullable(),
+    updated_at: z.string().datetime(),
+  })
+  .strict();
+
+export const ragTeamRecordSchema = z
+  .object({
+    team_id: z.string(),
+    name: z.string(),
+    status: teamStatusSchema,
+    capability_profile: ragCapabilityProfileSchema,
+    member_count: z.number().int().min(0),
+    updated_at: z.string().datetime(),
+  })
+  .strict();
+
+export const ragShelterRecordSchema = z
+  .object({
+    shelter_id: z.string(),
+    name: z.string(),
+    status: shelterStatusSchema,
+    total_capacity: z.number().int().min(0),
+    current_occupancy: z.number().int().min(0),
+    available_capacity: z.number().int(),
+    latitude: z.number(),
+    longitude: z.number(),
+    capabilities: ragCapabilityProfileSchema,
+    updated_at: z.string().datetime(),
+  })
+  .strict();
+
+export const ragAssignmentItemRecordSchema = z
+  .object({
+    resource_type: resourceTypeSchema.nullable(),
+    resource_id: z.string().nullable(),
+    team_id: z.string().nullable(),
+    shelter_id: z.string().nullable(),
+    quantity: z.number(),
+  })
+  .strict();
+
+export const ragAssignmentRecordSchema = z
+  .object({
+    assignment_id: z.string(),
+    incident_id: z.string(),
+    status: assignmentStatusSchema,
+    field_team_id: z.string().nullable(),
+    assigned_at: z.string().datetime(),
+    started_at: z.string().datetime().nullable(),
+    completed_at: z.string().datetime().nullable(),
+    created_at: z.string().datetime(),
+    items: z.array(ragAssignmentItemRecordSchema),
+  })
+  .strict();
+
+export const ragToolRecordSchemas = {
+  get_active_incidents: ragIncidentRecordSchema,
+  get_nearby_ambulances: ragResourceRecordSchema,
+  get_available_rescue_teams: ragTeamRecordSchema,
+  get_shelter_capacity: ragShelterRecordSchema,
+  get_resource_stock: ragResourceRecordSchema,
+  get_current_assignments: ragAssignmentRecordSchema,
+} as const;

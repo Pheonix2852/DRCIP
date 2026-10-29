@@ -5,6 +5,11 @@ import { requireRole } from '../middleware/auth';
 import prisma from '../lib/prisma';
 import { publicId } from '../lib/publicId';
 import {
+  queryShelterList,
+  shelterSelect,
+  type ShelterRow,
+} from '../lib/domainQueries';
+import {
   createShelterSchema,
   updateShelterSchema,
   shelterQuerySchema,
@@ -23,67 +28,13 @@ function notFound(res: Response, req: AppRequest) {
   });
 }
 
-interface ShelterRow {
-  id: string;
-  name: string;
-  latitude: number | null;
-  longitude: number | null;
-  total_capacity: number;
-  current_occupancy: number;
-  status: string;
-  capabilities: unknown;
-  created_at: Date;
-  updated_at: Date;
-}
-
-// SQL helper for consistent selection
-function shelterSelect() {
-  return Prisma.sql`
-    SELECT
-      s."publicId" AS id,
-      s."name",
-      ST_Y(s."location"::geometry)::float8 AS latitude,
-      ST_X(s."location"::geometry)::float8 AS longitude,
-      s."totalCapacity" AS total_capacity,
-      s."currentOccupancy" AS current_occupancy,
-      s."status"::text AS status,
-      s."capabilities",
-      s."createdAt" AS created_at,
-      s."updatedAt" AS updated_at
-    FROM "Shelter" s
-  `;
-}
-
 router.get('/', requireRole(...READ_ROLES), async (req: AppRequest, res, next) => {
   try {
     const query = shelterQuerySchema.parse(req.query);
-    const offset = (query.page - 1) * query.limit;
-
-    const conditions: Prisma.Sql[] = [];
-    if (query.status) conditions.push(Prisma.sql`s."status" = ${query.status}::"ShelterStatus"`);
-    if (query.search) conditions.push(Prisma.sql`s."name" ILIKE ${`%${query.search}%`}`);
-    if (query.min_available_capacity !== undefined) {
-      conditions.push(Prisma.sql`s."currentOccupancy" <= (s."totalCapacity" - ${query.min_available_capacity})`);
-    }
-
-    if (query.nearby_lat !== undefined && query.nearby_lng !== undefined && query.nearby_radius_km !== undefined) {
-      const radiusMeters = query.nearby_radius_km * 1000;
-      conditions.push(
-        Prisma.sql`ST_DWithin(s."location", ST_SetSRID(ST_MakePoint(${query.nearby_lng}, ${query.nearby_lat}), 4326)::geography, ${radiusMeters})`
-      );
-    }
-
-    const where = conditions.length > 0 ? Prisma.sql`WHERE ${Prisma.join(conditions, ' AND ')}` : Prisma.empty;
-
-    const [items, totalCount] = await Promise.all([
-      prisma.$queryRaw<ShelterRow[]>`
-        ${shelterSelect()}
-        ${where}
-        ORDER BY s."createdAt" ${query.sort === 'oldest' ? Prisma.sql`ASC` : Prisma.sql`DESC`}
-        LIMIT ${query.limit} OFFSET ${offset}
-      `,
-      prisma.$queryRaw<{ count: bigint }[]>`SELECT COUNT(*)::bigint AS count FROM "Shelter" s ${where}`
-    ]);
+    const { items, total } = await queryShelterList({
+      scope: { kind: 'ALL' },
+      query,
+    });
 
     res.json({
       success: true,
@@ -92,8 +43,8 @@ router.get('/', requireRole(...READ_ROLES), async (req: AppRequest, res, next) =
         pagination: {
           page: query.page,
           limit: query.limit,
-          total: Number(totalCount[0]?.count ?? 0),
-          total_pages: Math.ceil(Number(totalCount[0]?.count ?? 0) / query.limit),
+          total,
+          total_pages: Math.ceil(total / query.limit),
         },
       },
     });

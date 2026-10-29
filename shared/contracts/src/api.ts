@@ -8,6 +8,8 @@ import {
   ResourceType,
   ResourceStatus,
   AssignmentStatus,
+  TeamStatus,
+  ShelterStatus,
   RecommendationDecision,
   PredictionStatus,
   NotificationChannel,
@@ -16,6 +18,8 @@ import {
   NotificationPriority,
   NotificationRecipientScope,
   RagResponseStatus,
+  RagToolName,
+  RagToolOutcome,
   Pagination,
   ApiErrorEnvelope,
   ApiSuccessEnvelope,
@@ -275,12 +279,206 @@ export interface RagCitation {
   source_organization?: string;
 }
 
+// ---------------------------------------------------------------------------
+// RAG 2.0 live-tool contract (frozen; tools are not implemented in v1)
+// See docs/05_API_Contract.md #14 and docs/02_Functional_Specification.md #12
+// ---------------------------------------------------------------------------
+
+export type ActiveIncidentStatus = Exclude<IncidentStatus, 'RESOLVED'>;
+
+export interface GetActiveIncidentsArgs {
+  status?: ActiveIncidentStatus;
+  disaster_type?: DisasterType;
+  severity?: SeverityLevel;
+  latitude?: number;
+  longitude?: number;
+  radius_km?: number;
+  limit?: number;
+}
+
+export interface GetNearbyAmbulancesArgs {
+  latitude: number;
+  longitude: number;
+  radius_km: number;
+  status?: ResourceStatus;
+  limit?: number;
+}
+
+export interface GetAvailableRescueTeamsArgs {
+  capability?: string;
+  limit?: number;
+}
+
+export interface GetShelterCapacityArgs {
+  status?: 'AVAILABLE' | 'FULL' | 'UNAVAILABLE';
+  min_available_capacity?: number;
+  latitude?: number;
+  longitude?: number;
+  radius_km?: number;
+  limit?: number;
+}
+
+export interface GetResourceStockArgs {
+  resource_type?: ResourceType;
+  status?: ResourceStatus;
+  latitude?: number;
+  longitude?: number;
+  radius_km?: number;
+  limit?: number;
+}
+
+export interface GetCurrentAssignmentsArgs {
+  incident_id?: string;
+  status?: AssignmentStatus;
+  limit?: number;
+}
+
+export interface RagToolArgumentMap {
+  get_active_incidents: GetActiveIncidentsArgs;
+  get_nearby_ambulances: GetNearbyAmbulancesArgs;
+  get_available_rescue_teams: GetAvailableRescueTeamsArgs;
+  get_shelter_capacity: GetShelterCapacityArgs;
+  get_resource_stock: GetResourceStockArgs;
+  get_current_assignments: GetCurrentAssignmentsArgs;
+}
+
+export type RagToolInvocation = {
+  [T in RagToolName]: { tool: T; arguments: RagToolArgumentMap[T] };
+}[RagToolName];
+
+export interface RagIncidentRecord {
+  incident_id: string;
+  disaster_type: DisasterType;
+  description: string;
+  status: IncidentStatus;
+  confirmed_severity: SeverityLevel | null;
+  predicted_severity: SeverityLevel | null;
+  people_affected: number;
+  latitude: number | null;
+  longitude: number | null;
+  address_text: string | null;
+  state: string | null;
+  district: string | null;
+  response_zone_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RagResourceRecord {
+  resource_id: string;
+  resource_type: ResourceType;
+  name: string;
+  status: ResourceStatus;
+  quantity: number;
+  unit: string | null;
+  capacity: number | null;
+  latitude: number | null;
+  longitude: number | null;
+  updated_at: string;
+}
+
+export interface RagTeamRecord {
+  team_id: string;
+  name: string;
+  status: TeamStatus;
+  capability_profile: Record<string, unknown>;
+  member_count: number;
+  updated_at: string;
+}
+
+export interface RagShelterRecord {
+  shelter_id: string;
+  name: string;
+  status: ShelterStatus;
+  total_capacity: number;
+  current_occupancy: number;
+  available_capacity: number;
+  latitude: number;
+  longitude: number;
+  capabilities: Record<string, unknown>;
+  updated_at: string;
+}
+
+export interface RagAssignmentItemRecord {
+  resource_type: ResourceType | null;
+  resource_id: string | null;
+  team_id: string | null;
+  shelter_id: string | null;
+  quantity: number;
+}
+
+export interface RagAssignmentRecord {
+  assignment_id: string;
+  incident_id: string;
+  status: AssignmentStatus;
+  field_team_id: string | null;
+  assigned_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+  items: RagAssignmentItemRecord[];
+}
+
+export interface RagToolRecordMap {
+  get_active_incidents: RagIncidentRecord;
+  get_nearby_ambulances: RagResourceRecord;
+  get_available_rescue_teams: RagTeamRecord;
+  get_shelter_capacity: RagShelterRecord;
+  get_resource_stock: RagResourceRecord;
+  get_current_assignments: RagAssignmentRecord;
+}
+
+interface RagToolResultBase<T extends RagToolName> {
+  tool: T;
+  as_of: string;
+}
+
+export interface RagToolSuccessResult<T extends RagToolName> extends RagToolResultBase<T> {
+  outcome: 'SUCCESS';
+  records: RagToolRecordMap[T][];
+  returned_count: number;
+  truncated: boolean;
+}
+
+export interface RagToolEmptyResult<T extends RagToolName> extends RagToolResultBase<T> {
+  outcome: 'EMPTY';
+  records: [];
+  returned_count: 0;
+  truncated: false;
+}
+
+export interface RagToolFailureResult<T extends RagToolName> extends RagToolResultBase<T> {
+  outcome: 'UNAVAILABLE' | 'ERROR';
+  records: [];
+  returned_count: 0;
+  truncated: false;
+  message: string;
+}
+
+export type RagToolResult<T extends RagToolName> =
+  | RagToolSuccessResult<T>
+  | RagToolEmptyResult<T>
+  | RagToolFailureResult<T>;
+
+export interface RagToolCall {
+  tool: RagToolName;
+  outcome: RagToolOutcome;
+  as_of: string;
+  returned_count: number;
+  truncated: boolean;
+}
+
+export interface RagLiveEvidence extends RagToolCall {
+  evidence_type: 'LIVE_OPERATIONAL_DATA';
+}
+
 export interface RagQueryResponse {
   status: RagResponseStatus;
   answer: string;
   citations: RagCitation[];
-  tool_calls: unknown[];
+  tool_calls: RagToolCall[];
   rag_version: string;
+  live_evidence?: RagLiveEvidence[];
 }
 
 // Intelligence

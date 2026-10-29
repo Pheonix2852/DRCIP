@@ -53,17 +53,24 @@ export function serializeAssignment(a: AssignmentWithRelations) {
   };
 }
 
+export type AssignmentAccessScope =
+  | { kind: 'ALL' }
+  | { kind: 'OWN_TEAM'; userId: string };
+
+export function assignmentAccessScope(role: string, userId: string): AssignmentAccessScope {
+  return role === 'FIELD_OFFICER' ? { kind: 'OWN_TEAM', userId } : { kind: 'ALL' };
+}
+
 export async function queryAssignments(opts: {
-  userId: string;
-  role: string;
+  scope: AssignmentAccessScope;
   query: AssignmentQueryInput;
 }) {
-  const { userId, role, query } = opts;
+  const { scope, query } = opts;
   const where: Prisma.AssignmentWhereInput = {};
   if (query.status) where.status = query.status;
   if (query.incident_id) where.incident = { publicId: query.incident_id };
   // A Field Officer only sees assignments for the team they lead.
-  if (role === 'FIELD_OFFICER') where.FieldTeam = { leaderUserId: userId };
+  if (scope.kind === 'OWN_TEAM') where.FieldTeam = { leaderUserId: scope.userId };
 
   const offset = (query.page - 1) * query.limit;
   const [rows, total] = await Promise.all([

@@ -5,6 +5,7 @@ import { requireRole } from '../middleware/auth';
 import prisma from '../lib/prisma';
 import { publicId } from '../lib/publicId';
 import { teamInclude, serializeTeam, serializeMember } from '../lib/teamSerializer';
+import { queryTeamList } from '../lib/domainQueries';
 import {
   createTeamSchema,
   updateTeamSchema,
@@ -44,31 +45,13 @@ function notFound(res: Response, req: AppRequest) {
 router.get('/', requireRole(...READ_ROLES), async (req: AppRequest, res, next) => {
   try {
     const query = teamQuerySchema.parse(req.query);
-    const offset = (query.page - 1) * query.limit;
-
-    const where: Prisma.FieldTeamWhereInput = {};
-    if (query.status) where.status = query.status;
-    // A Field Officer only sees the team they lead.
-    if (req.userRole === 'FIELD_OFFICER') {
-      where.leaderUserId = req.userId;
-    }
-    if (query.search) {
-      where.OR = [
-        { name: { contains: query.search, mode: 'insensitive' } },
-        { leader: { fullName: { contains: query.search, mode: 'insensitive' } } },
-      ];
-    }
-
-    const [teams, total] = await Promise.all([
-      prisma.fieldTeam.findMany({
-        where,
-        include: teamInclude,
-        orderBy: { createdAt: query.sort === 'oldest' ? 'asc' : 'desc' },
-        skip: offset,
-        take: query.limit,
-      }),
-      prisma.fieldTeam.count({ where }),
-    ]);
+    const { items: teams, total } = await queryTeamList({
+      scope:
+        req.userRole === 'FIELD_OFFICER'
+          ? { kind: 'OWN_TEAM', userId: req.userId! }
+          : { kind: 'ALL' },
+      query,
+    });
 
     res.json({
       success: true,

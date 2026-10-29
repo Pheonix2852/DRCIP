@@ -9,6 +9,7 @@ import {
   assignmentInclude,
   serializeAssignment,
   queryAssignments,
+  assignmentAccessScope,
   type AssignmentWithRelations,
 } from '../lib/assignmentSerializer';
 import {
@@ -297,7 +298,10 @@ incidentAssignmentsRouter.post(
 assignmentsRouter.get('/', requireRole(...READ_ROLES), async (req: AppRequest, res, next) => {
   try {
     const query = assignmentQuerySchema.parse(req.query);
-    const data = await queryAssignments({ userId: req.userId!, role: req.userRole!, query });
+    const data = await queryAssignments({
+      scope: assignmentAccessScope(req.userRole!, req.userId!),
+      query,
+    });
     res.json({ success: true, data });
   } catch (err) {
     next(err);

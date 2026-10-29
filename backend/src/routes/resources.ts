@@ -5,6 +5,11 @@ import { requireRole } from '../middleware/auth';
 import prisma from '../lib/prisma';
 import { publicId } from '../lib/publicId';
 import {
+  queryResourceList,
+  resourceSelect,
+  type ResourceRow,
+} from '../lib/domainQueries';
+import {
   createResourceSchema,
   updateResourceSchema,
   resourceQuerySchema,
@@ -27,94 +32,6 @@ function getWsService() {
   } catch {
     return { publishResourceUpdated: () => {} };
   }
-}
-
-interface ResourceRow {
-  id: string;
-  resource_type: string;
-  name: string;
-  status: string;
-  quantity: number;
-  unit: string | null;
-  capacity: number | null;
-  capability_profile: unknown;
-  latitude: number | null;
-  longitude: number | null;
-  contact_reference: string | null;
-  team_id: string | null;
-  is_own_team: boolean;
-  created_at: Date;
-  updated_at: Date;
-}
-
-// Geography is an Unsupported Prisma type, so resources are read/written with
-// raw SQL and coordinates are projected to latitude/longitude consistently with
-// the Incident convention. `is_own_team` contextualizes team linkage for the
-// requesting Field Officer without exposing the raw team foreign key.
-function resourceSelect(requesterId: string): Prisma.Sql {
-  return Prisma.sql`
-    SELECT
-      r."publicId" AS id,
-      r."resourceType"::text AS resource_type,
-      r."name" AS name,
-      r."status"::text AS status,
-      r."quantity"::float8 AS quantity,
-      r."unit" AS unit,
-      r."capacity"::float8 AS capacity,
-      r."capabilityProfile" AS capability_profile,
-      ST_Y(r."location"::geometry)::float8 AS latitude,
-      ST_X(r."location"::geometry)::float8 AS longitude,
-      r."contactReference" AS contact_reference,
-      t."publicId" AS team_id,
-      COALESCE(t."leaderUserId" = ${requesterId}, false) AS is_own_team,
-      r."createdAt" AS created_at,
-      r."updatedAt" AS updated_at
-    FROM "Resource" r
-    LEFT JOIN "FieldTeam" t ON r."teamId" = t."id"
-  `;
-}
-
-function buildWhere(query: {
-  resource_type?: string;
-  status?: string;
-  capability?: string;
-  search?: string;
-  nearby_lat?: number;
-  nearby_lng?: number;
-  nearby_radius_km?: number;
-}): Prisma.Sql {
-  const conditions: Prisma.Sql[] = [];
-
-  if (query.resource_type) {
-    conditions.push(Prisma.sql`r."resourceType" = ${query.resource_type}::"ResourceType"`);
-  }
-  if (query.status) {
-    conditions.push(Prisma.sql`r."status" = ${query.status}::"ResourceStatus"`);
-  }
-  if (query.search) {
-    const like = `%${query.search}%`;
-    conditions.push(Prisma.sql`(r."name" ILIKE ${like} OR r."publicId" ILIKE ${like})`);
-  }
-  if (query.capability) {
-    // capability_profile is an open JSONB document; match a top-level capability
-    // key (jsonb_exists is the function form of the `?` operator) or a value.
-    const like = `%${query.capability}%`;
-    conditions.push(
-      Prisma.sql`(jsonb_exists(r."capabilityProfile", ${query.capability}) OR r."capabilityProfile"::text ILIKE ${like})`,
-    );
-  }
-  if (
-    query.nearby_lat !== undefined &&
-    query.nearby_lng !== undefined &&
-    query.nearby_radius_km !== undefined
-  ) {
-    const radiusMeters = query.nearby_radius_km * 1000;
-    conditions.push(
-      Prisma.sql`ST_DWithin(r."location", ST_SetSRID(ST_MakePoint(${query.nearby_lng}, ${query.nearby_lat}), 4326)::geography, ${radiusMeters})`,
-    );
-  }
-
-  return conditions.length > 0 ? Prisma.sql`${Prisma.join(conditions, ' AND ')}` : Prisma.sql`TRUE`;
 }
 
 function buildUpdateSets(body: UpdateResourceInput): Prisma.Sql[] {
@@ -142,20 +59,13 @@ function buildUpdateSets(body: UpdateResourceInput): Prisma.Sql[] {
 router.get('/', requireRole(...READ_ROLES), async (req: AppRequest, res, next) => {
   try {
     const query = resourceQuerySchema.parse(req.query);
-    const where = buildWhere(query);
-    const direction = query.sort === 'oldest' ? Prisma.sql`ASC` : Prisma.sql`DESC`;
-    const offset = (query.page - 1) * query.limit;
-
-    const [items, countRows] = await Promise.all([
-      prisma.$queryRaw<ResourceRow[]>(
-        Prisma.sql`${resourceSelect(req.userId!)} WHERE ${where} ORDER BY r."createdAt" ${direction} LIMIT ${query.limit} OFFSET ${offset}`,
-      ),
-      prisma.$queryRaw<{ count: number }[]>(
-        Prisma.sql`SELECT count(*)::int AS count FROM "Resource" r WHERE ${where}`,
-      ),
-    ]);
-
-    const total = countRows[0]?.count ?? 0;
+    // Existing REST behavior: all read roles see the full inventory. Future RAG
+    // tools can pass OWN_TEAM without changing this route.
+    const { items, total } = await queryResourceList({
+      scope: { kind: 'ALL' },
+      query,
+      requesterId: req.userId!,
+    });
 
     res.json({
       success: true,
