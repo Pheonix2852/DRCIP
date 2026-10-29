@@ -15,7 +15,8 @@ import { teamInclude, type TeamWithRelations } from './teamSerializer';
 export type IncidentAccessScope =
   | { kind: 'ALL' }
   | { kind: 'REPORTER'; userId: string }
-  | { kind: 'FIELD_OFFICER'; userId: string };
+  | { kind: 'FIELD_OFFICER'; userId: string }
+  | { kind: 'ASSIGNED_TEAM'; userId: string };
 
 export interface IncidentListRow {
   id: string;
@@ -51,8 +52,17 @@ function incidentScopeSql(scope: IncidentAccessScope): Prisma.Sql {
           WHERE a."incidentId" = i.id AND t."leaderUserId" = ${scope.userId}
         )
       )`;
+    case 'ASSIGNED_TEAM':
+      return Prisma.sql`EXISTS (
+        SELECT 1
+        FROM "Assignment" a
+        JOIN "FieldTeam" t ON a."fieldTeamId" = t.id
+        WHERE a."incidentId" = i.id AND t."leaderUserId" = ${scope.userId}
+      )`;
     case 'ALL':
       return Prisma.sql`TRUE`;
+    default:
+      return Prisma.sql`FALSE`;
   }
 }
 
@@ -83,10 +93,20 @@ export async function queryIncidentList(opts: {
   scope: IncidentAccessScope;
   query: IncidentQueryInput;
   responseZoneId?: string;
+  activeOnly?: boolean;
+  nearby?: { latitude: number; longitude: number; radiusKm: number };
 }) {
   const { scope, query } = opts;
   const responseZoneId = opts.responseZoneId?.trim() ?? '';
   const conditions = [incidentScopeSql(scope), ...incidentFilters(query, responseZoneId)];
+  if (opts.activeOnly) {
+    conditions.push(Prisma.sql`i.status <> 'RESOLVED'`);
+  }
+  if (opts.nearby) {
+    conditions.push(
+      Prisma.sql`ST_DWithin(i."location", ST_SetSRID(ST_MakePoint(${opts.nearby.longitude}, ${opts.nearby.latitude}), 4326)::geography, ${opts.nearby.radiusKm * 1000})`,
+    );
+  }
   const where = Prisma.sql`${Prisma.join(conditions, ' AND ')}`;
   const offset = (query.page - 1) * query.limit;
 
@@ -240,7 +260,8 @@ export async function queryResourceList(opts: {
 
 export type ShelterAccessScope =
   | { kind: 'ALL' }
-  | { kind: 'FIELD_OFFICER'; userId: string };
+  | { kind: 'FIELD_OFFICER'; userId: string }
+  | { kind: 'ACTIVE_ASSIGNMENT_TEAM'; userId: string };
 
 export interface ShelterRow {
   id: string;
@@ -275,6 +296,19 @@ export function shelterSelect(): Prisma.Sql {
 
 function shelterScopeSql(scope: ShelterAccessScope): Prisma.Sql | null {
   if (scope.kind === 'ALL') return null;
+  if (scope.kind === 'ACTIVE_ASSIGNMENT_TEAM') {
+    return Prisma.sql`EXISTS (
+      SELECT 1
+      FROM "AssignmentItem" ai
+      JOIN "Assignment" a ON ai."assignmentId" = a.id
+      JOIN "FieldTeam" t ON a."fieldTeamId" = t.id
+      JOIN "Incident" i ON a."incidentId" = i.id
+      WHERE ai."shelterId" = s.id
+        AND t."leaderUserId" = ${scope.userId}
+        AND a."status" IN ('ASSIGNED', 'IN_PROGRESS')
+        AND i."status" <> 'RESOLVED'
+    )`;
+  }
   return Prisma.sql`EXISTS (
     SELECT 1
     FROM "AssignmentItem" ai
@@ -338,7 +372,11 @@ export type TeamAccessScope =
   | { kind: 'ALL' }
   | { kind: 'OWN_TEAM'; userId: string };
 
-export function buildTeamWhere(query: TeamQueryInput, scope: TeamAccessScope): Prisma.FieldTeamWhereInput {
+export function buildTeamWhere(
+  query: TeamQueryInput,
+  scope: TeamAccessScope,
+  capability?: string,
+): Prisma.FieldTeamWhereInput {
   const where: Prisma.FieldTeamWhereInput = {};
   if (query.status) where.status = query.status;
   if (scope.kind === 'OWN_TEAM') where.leaderUserId = scope.userId;
@@ -348,15 +386,19 @@ export function buildTeamWhere(query: TeamQueryInput, scope: TeamAccessScope): P
       { leader: { fullName: { contains: query.search, mode: 'insensitive' } } },
     ];
   }
+  if (capability) {
+    where.AND = [{ capabilityProfile: { path: [capability], not: Prisma.DbNull } }];
+  }
   return where;
 }
 
 export async function queryTeamList(opts: {
   scope: TeamAccessScope;
   query: TeamQueryInput;
+  capability?: string;
 }): Promise<{ items: TeamWithRelations[]; total: number }> {
   const { scope, query } = opts;
-  const where = buildTeamWhere(query, scope);
+  const where = buildTeamWhere(query, scope, opts.capability);
   const offset = (query.page - 1) * query.limit;
 
   const [items, total] = await Promise.all([
