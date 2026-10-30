@@ -1,4 +1,8 @@
-import type { RagCitation } from '@drcip/contracts';
+import {
+  ragToolInvocationSchema,
+  type RagCitation,
+  type RagToolInvocation,
+} from '@drcip/contracts';
 import {
   DEFAULT_RAG_SERVICE_URL,
   DEFAULT_RAG_TIMEOUT_MS,
@@ -17,6 +21,7 @@ interface HostedSource {
 interface HostedResponse {
   answer?: unknown;
   sources?: unknown;
+  tool_calls?: unknown;
 }
 
 function nonEmptyString(value: unknown): string | undefined {
@@ -59,6 +64,18 @@ function mapSource(source: unknown): RagCitation | null {
   return citation;
 }
 
+function mapToolInvocation(value: unknown): RagToolInvocation | null {
+  if (typeof value !== 'object' || value === null) return null;
+
+  const raw = value as Record<string, unknown>;
+  const parsed = ragToolInvocationSchema.safeParse({
+    tool: raw.tool ?? raw.name,
+    arguments: raw.arguments ?? raw.args ?? {},
+  });
+
+  return parsed.success ? parsed.data : null;
+}
+
 function mapResponse(payload: unknown): RagProviderResult | null {
   if (typeof payload !== 'object' || payload === null) return null;
 
@@ -73,11 +90,25 @@ function mapResponse(payload: unknown): RagProviderResult | null {
     citations.push(citation);
   }
 
-  if (citations.length === 0) {
-    return { status: 'ABSTAINED', answer, citations: [] };
+  let toolInvocations: RagToolInvocation[] | undefined;
+  if (body.tool_calls !== undefined) {
+    if (!Array.isArray(body.tool_calls)) return null;
+    const mapped: RagToolInvocation[] = [];
+    for (const value of body.tool_calls) {
+      const invocation = mapToolInvocation(value);
+      if (!invocation) return null;
+      mapped.push(invocation);
+    }
+    if (mapped.length > 0) toolInvocations = mapped;
   }
 
-  return { status: 'GROUNDED', answer, citations };
+  const result: RagProviderResult =
+    citations.length === 0
+      ? { status: 'ABSTAINED', answer, citations: [] }
+      : { status: 'GROUNDED', answer, citations };
+
+  if (toolInvocations) result.tool_invocations = toolInvocations;
+  return result;
 }
 
 export interface HostedRagProviderConfig {

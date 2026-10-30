@@ -34,7 +34,12 @@ router.post(
         }
       }
 
-      const result = await ragService.query(body.query);
+      const result = await ragService.query(body.query, {
+        userId: req.userId,
+        userRole: req.userRole,
+        incidentId: body.incident_id,
+        requestId: req.requestId,
+      });
 
       res.json({ success: true, data: result });
     } catch (err) {

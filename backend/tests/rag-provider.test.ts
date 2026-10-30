@@ -146,6 +146,39 @@ describe('HostedRagProvider response mapping', () => {
     expect(result.citations[0].section).toBeUndefined();
   });
 
+  it('maps model-requested tool calls to typed invocations', async () => {
+    fetchMock.mockResolvedValue(
+      response(
+        providerPayload({
+          tool_calls: [
+            { tool: 'get_shelter_capacity', arguments: { limit: 5 } },
+          ],
+        }),
+      ),
+    );
+
+    const result = await provider().query('What now?');
+
+    expect(result.tool_invocations).toEqual([
+      { tool: 'get_shelter_capacity', arguments: { limit: 5 } },
+    ]);
+  });
+
+  it('maps malformed tool calls to UNAVAILABLE without executing them', async () => {
+    fetchMock.mockResolvedValue(
+      response(
+        providerPayload({
+          tool_calls: [{ tool: 'execute_sql', arguments: { query: 'select 1' } }],
+        }),
+      ),
+    );
+
+    const result = await provider().query('What now?');
+
+    expect(result.status).toBe('UNAVAILABLE');
+    expect(result.tool_invocations).toBeUndefined();
+  });
+
   it('keeps an optional provider title when supplied', async () => {
     fetchMock.mockResolvedValue(
       response(

@@ -165,7 +165,15 @@ describe('POST /api/v1/rag/query validation', () => {
       });
 
     expect(res.status).toBe(200);
-    expect(queryMock).toHaveBeenCalledWith('What does the guidance say?');
+    expect(queryMock).toHaveBeenCalledWith(
+      'What does the guidance say?',
+      expect.objectContaining({
+        incidentId: incidentRes.body.data.incident_id,
+        userId: expect.any(String),
+        userRole: 'CITIZEN',
+        requestId: expect.any(String),
+      }),
+    );
   });
 
   it('does not expose another citizen incident through incident context', async () => {
