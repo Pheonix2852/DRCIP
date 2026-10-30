@@ -19,11 +19,13 @@ import {
   ragUnavailable,
 } from './RagProvider';
 import {
+  authorizeRagTool,
   RagToolAuthorizationError,
   resolveRagToolContext,
+  type RagToolAuthorization,
   type RagToolContext,
 } from './ragToolAuthorization';
-import { executeRagTool } from './ragTools';
+import { runRagTool } from './ragTools';
 
 export function createRagProvider(): RagProvider {
   return process.env.RAG_PROVIDER?.trim().toLowerCase() === 'mock'
@@ -187,38 +189,57 @@ async function executeInvocation(
     return { call };
   }
 
-  let authorization: 'ALLOWED' | 'DENIED' = 'DENIED';
+  const tool = parsedInvocation.data.tool;
+  const args = parsedInvocation.data.arguments;
+  const errorCall = (): RagToolCall => ({
+    tool,
+    outcome: 'ERROR',
+    as_of: observedAt,
+    returned_count: 0,
+    truncated: false,
+  });
+
+  // Authorization is a separate phase from execution so the audit trail can
+  // distinguish a denied call from an authorized call that then failed.
+  let authorization: RagToolAuthorization;
+  try {
+    authorization = await authorizeRagTool(ctx, tool, args);
+  } catch (err) {
+    const call = errorCall();
+    await auditToolCall({
+      context,
+      tool,
+      authorization: 'DENIED',
+      outcome: call.outcome,
+      errorCode:
+        err instanceof RagToolAuthorizationError ? err.code : 'AUTHORIZATION_UNAVAILABLE',
+      asOf: call.as_of,
+      returnedCount: call.returned_count,
+      truncated: call.truncated,
+      durationMs: Date.now() - startedAt,
+    });
+    return { call };
+  }
+
   let errorCode: string | undefined;
   let call: RagToolCall;
   let evidence: RagLiveEvidence | undefined;
 
   try {
-    const result = await executeRagTool(
-      ctx,
-      parsedInvocation.data.tool,
-      parsedInvocation.data.arguments,
-    );
-    authorization = 'ALLOWED';
+    const result = await runRagTool(ctx, tool, args, authorization);
     call = toToolCall(result);
     if (result.outcome === 'SUCCESS' || result.outcome === 'EMPTY') {
       evidence = { evidence_type: 'LIVE_OPERATIONAL_DATA', ...call };
     }
-  } catch (err) {
-    errorCode =
-      err instanceof RagToolAuthorizationError ? err.code : 'EXECUTION_ERROR';
-    call = {
-      tool: parsedTool.data,
-      outcome: 'ERROR',
-      as_of: observedAt,
-      returned_count: 0,
-      truncated: false,
-    };
+  } catch {
+    errorCode = 'EXECUTION_ERROR';
+    call = errorCall();
   }
 
   const audited = await auditToolCall({
     context,
     tool: call.tool,
-    authorization,
+    authorization: 'ALLOWED',
     outcome: call.outcome,
     errorCode,
     asOf: call.as_of,

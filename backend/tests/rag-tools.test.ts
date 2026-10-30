@@ -1,11 +1,18 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll, vi } from 'vitest';
+import {
+  RAG_TOOL_ALLOWED_ROLES,
+  RAG_TOOL_NAMES,
+  ragToolArgumentSchemas,
+  ragToolInvocationSchema,
+  type RagToolName,
+} from '@drcip/contracts';
 import prisma from '../src/lib/prisma';
 import { publicId } from '../src/lib/publicId';
 import {
   authorizeRagTool,
   resolveRagToolContext,
 } from '../src/services/ragToolAuthorization';
-import { executeRagTool } from '../src/services/ragTools';
+import { executeRagTool, ragToolHandlers } from '../src/services/ragTools';
 import {
   createAuthedUser,
   createIncident,
@@ -124,7 +131,11 @@ describe('RAG tool authorization', () => {
         radius_km: 10,
         limit: 10,
       }),
-    ).resolves.toEqual({ kind: 'ALL' });
+    ).resolves.toEqual({
+      kind: 'INCIDENT_SCOPE',
+      userId: officer.user.id,
+      radiusKm: 10,
+    });
 
     await expectAuthError(
       authorizeRagTool(ctx, 'get_nearby_ambulances', {
@@ -252,6 +263,70 @@ describe('RAG live tools', () => {
     const stock = await executeRagTool(coordinatorCtx, 'get_resource_stock', { limit: 10 });
     expect(stock.outcome).toBe('SUCCESS');
     expect(stock.records.length).toBeGreaterThan(0);
+  });
+
+  it('keeps nearby ambulance results inside the officer incident scope', async () => {
+    const officer = await createAuthedUser('FIELD_OFFICER');
+    const citizen = await createAuthedUser('CITIZEN');
+    const coordinator = await createAuthedUser('DISASTER_COORDINATOR');
+    const team = await createTeam({ leaderUserId: officer.user.id });
+    const incident = await createIncident(citizen.token, {
+      latitude: 22.5726,
+      longitude: 88.3639,
+    });
+    const incidentRecord = await prisma.incident.findUniqueOrThrow({
+      where: { publicId: incident.body.data.incident_id },
+    });
+    await prisma.assignment.create({
+      data: {
+        publicId: publicId('ASN'),
+        incidentId: incidentRecord.id,
+        assignedBy: coordinator.user.id,
+        status: 'ASSIGNED',
+        assignedAt: new Date(),
+        fieldTeamId: team.id,
+      },
+    });
+
+    const atIncident = await createResource({
+      name: 'At Incident',
+      latitude: 22.5726,
+      longitude: 88.3639,
+    });
+    const nearSearchCenter = await createResource({
+      name: 'Near Search Center',
+      latitude: 22.65,
+      longitude: 88.3639,
+    });
+    const outsideIncident = await createResource({
+      name: 'Outside Incident Scope',
+      latitude: 22.73,
+      longitude: 88.3639,
+    });
+    await createResource({
+      name: 'Outside Search Circle',
+      latitude: 28.6139,
+      longitude: 77.209,
+    });
+
+    const ctx = await resolveRagToolContext({
+      userId: officer.user.id,
+      userRole: 'FIELD_OFFICER',
+    });
+    const result = await executeRagTool(ctx, 'get_nearby_ambulances', {
+      latitude: 22.65,
+      longitude: 88.3639,
+      radius_km: 10,
+      status: 'AVAILABLE',
+      limit: 10,
+    });
+
+    expect(result.outcome).toBe('SUCCESS');
+    const returned = result.records.map((record) => record.resource_id).sort();
+    expect(returned).toEqual(
+      [atIncident.publicId, nearSearchCenter.publicId].sort(),
+    );
+    expect(returned).not.toContain(outsideIncident.publicId);
   });
 
   it('filters teams by capability and status without widening officer scope', async () => {
@@ -514,5 +589,44 @@ describe('RAG tool validation and degraded outcomes', () => {
       prisma.assignment.count(),
     ]);
     expect(countsAfter).toEqual(countsBefore);
+  });
+});
+
+describe('RAG live-tool contract reachability', () => {
+  it('registers every approved tool with a schema, handler, authorization and dispatch', async () => {
+    const approved = Object.values(RAG_TOOL_NAMES);
+    expect(Object.keys(ragToolHandlers).sort()).toEqual([...approved].sort());
+
+    const coordinator = await createAuthedUser('DISASTER_COORDINATOR');
+    const ctx = await resolveRagToolContext({
+      userId: coordinator.user.id,
+      userRole: 'DISASTER_COORDINATOR',
+    });
+    const validArgs: Record<RagToolName, Record<string, unknown>> = {
+      get_active_incidents: { limit: 1 },
+      get_nearby_ambulances: {
+        latitude: 22.5726,
+        longitude: 88.3639,
+        radius_km: 1,
+        limit: 1,
+      },
+      get_available_rescue_teams: { limit: 1 },
+      get_shelter_capacity: { limit: 1 },
+      get_resource_stock: { limit: 1 },
+      get_current_assignments: { limit: 1 },
+    };
+
+    for (const tool of approved) {
+      expect(ragToolArgumentSchemas[tool].safeParse(validArgs[tool]).success).toBe(true);
+      expect(RAG_TOOL_ALLOWED_ROLES[tool]).toBeDefined();
+      expect(typeof ragToolHandlers[tool]).toBe('function');
+      expect(
+        ragToolInvocationSchema.safeParse({ tool, arguments: validArgs[tool] }).success,
+      ).toBe(true);
+
+      const result = await executeRagTool(ctx, tool, validArgs[tool]);
+      expect(result.tool).toBe(tool);
+      expect(['SUCCESS', 'EMPTY', 'UNAVAILABLE']).toContain(result.outcome);
+    }
   });
 });

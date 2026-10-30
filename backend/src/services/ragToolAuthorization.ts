@@ -23,7 +23,8 @@ export type RagToolAuthorization =
   | { kind: 'ALL' }
   | { kind: 'OWN_TEAM'; userId: string }
   | { kind: 'ASSIGNED_TEAM'; userId: string }
-  | { kind: 'ACTIVE_ASSIGNMENT_TEAM'; userId: string };
+  | { kind: 'ACTIVE_ASSIGNMENT_TEAM'; userId: string }
+  | { kind: 'INCIDENT_SCOPE'; userId: string; radiusKm: number };
 
 export type RagToolAuthorizationErrorCode =
   | 'INVALID_CONTEXT'
@@ -109,9 +110,11 @@ export async function authorizeRagTool<T extends RagToolName>(
   switch (tool) {
     case 'get_active_incidents':
       return { kind: 'ASSIGNED_TEAM', userId: ctx.userId };
-    case 'get_nearby_ambulances':
-      await assertFieldOfficerIncidentProximity(ctx, tool, args as GetNearbyAmbulancesArgs);
-      return { kind: 'ALL' };
+    case 'get_nearby_ambulances': {
+      const nearbyArgs = args as GetNearbyAmbulancesArgs;
+      await assertFieldOfficerIncidentProximity(ctx, tool, nearbyArgs);
+      return { kind: 'INCIDENT_SCOPE', userId: ctx.userId, radiusKm: nearbyArgs.radius_km };
+    }
     case 'get_available_rescue_teams':
       return { kind: 'OWN_TEAM', userId: ctx.userId };
     case 'get_shelter_capacity':

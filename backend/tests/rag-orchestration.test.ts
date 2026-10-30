@@ -10,6 +10,7 @@ import {
 import prisma from '../src/lib/prisma';
 import { RagService } from '../src/services/RagService';
 import type { RagProviderResult } from '../src/services/RagProvider';
+import { ragToolHandlers } from '../src/services/ragTools';
 import {
   createAuthedUser,
   createShelter,
@@ -99,6 +100,40 @@ describe('RAG live-tool orchestration', () => {
     const serialized = JSON.stringify(audits);
     expect(serialized).not.toContain('Which shelters have space?');
     expect(serialized).not.toContain('Open Shelter');
+  });
+
+  it('keeps document citations separate from live evidence', async () => {
+    const coordinator = await createAuthedUser('DISASTER_COORDINATOR');
+    await createShelter({ name: 'Mixed Evidence Shelter' });
+    const service = new RagService({
+      query: vi.fn().mockResolvedValue({
+        status: 'GROUNDED',
+        answer: 'Document answer with live context.',
+        citations: [{ title: 'Flood Response Guide', page: 3 }],
+        tool_invocations: [
+          { tool: 'get_shelter_capacity', arguments: { limit: 10 } },
+        ],
+      }),
+    });
+
+    const result = await service.query('Shelters?', {
+      userId: coordinator.user.id,
+      userRole: 'DISASTER_COORDINATOR',
+      requestId: 'req-rag-mixed',
+    });
+
+    expect(result.citations).toEqual([
+      { title: 'Flood Response Guide', page: 3 },
+    ]);
+    expect(result.live_evidence).toEqual([
+      expect.objectContaining({
+        evidence_type: 'LIVE_OPERATIONAL_DATA',
+        tool: 'get_shelter_capacity',
+      }),
+    ]);
+    expect(JSON.stringify(result.citations)).not.toContain(
+      'LIVE_OPERATIONAL_DATA',
+    );
   });
 
   it('denies every live tool to a citizen without returning evidence', async () => {
@@ -227,6 +262,148 @@ describe('RAG live-tool orchestration', () => {
     ).toBe(0);
   });
 
+  it('executes exactly four tool calls in one turn', async () => {
+    const coordinator = await createAuthedUser('DISASTER_COORDINATOR');
+    await createShelter({ name: 'Four Calls Shelter' });
+    const invocations = Array.from({ length: 4 }, () => ({
+      tool: 'get_shelter_capacity',
+      arguments: { limit: 1 },
+    }));
+    const service = new RagService(providerWith(invocations));
+
+    const result = await service.query('Shelters?', {
+      userId: coordinator.user.id,
+      userRole: 'DISASTER_COORDINATOR',
+      requestId: 'req-rag-4-allowed',
+    });
+
+    expect(result.tool_calls).toHaveLength(4);
+    expect(result.tool_calls).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          tool: 'get_shelter_capacity',
+          outcome: 'SUCCESS',
+        }),
+      ]),
+    );
+    expect(
+      await prisma.auditLog.count({ where: { action: 'RAG_TOOL_CALL' } }),
+    ).toBe(4);
+    const turnAudit = await prisma.auditLog.findFirst({
+      where: { action: 'RAG_QUERY' },
+    });
+    expect(turnAudit?.metadata).toMatchObject({
+      requested_tool_calls: 4,
+    });
+    expect(turnAudit?.metadata).not.toHaveProperty('tool_limit_exceeded');
+  });
+
+  it('records an execution failure as an allowed but unavailable call', async () => {
+    const coordinator = await createAuthedUser('DISASTER_COORDINATOR');
+    const service = new RagService(
+      providerWith([
+        { tool: 'get_active_incidents', arguments: { limit: 10 } },
+      ]),
+    );
+
+    vi.spyOn(prisma, '$queryRaw').mockRejectedValue(
+      new Error('database unavailable'),
+    );
+
+    const result = await service.query('Any incidents?', {
+      userId: coordinator.user.id,
+      userRole: 'DISASTER_COORDINATOR',
+      requestId: 'req-rag-exec-fail',
+    });
+
+    expect(result.tool_calls).toEqual([
+      expect.objectContaining({
+        tool: 'get_active_incidents',
+        outcome: 'UNAVAILABLE',
+        returned_count: 0,
+      }),
+    ]);
+    expect(result.live_evidence).toBeUndefined();
+
+    const audit = await prisma.auditLog.findFirst({
+      where: { action: 'RAG_TOOL_CALL' },
+    });
+    expect(audit?.metadata).toMatchObject({
+      tool: 'get_active_incidents',
+      authorization: 'ALLOWED',
+      outcome: 'UNAVAILABLE',
+      error_code: null,
+    });
+  });
+
+  it('classifies a thrown execution error as an allowed call', async () => {
+    const coordinator = await createAuthedUser('DISASTER_COORDINATOR');
+    const service = new RagService(
+      providerWith([
+        { tool: 'get_shelter_capacity', arguments: { limit: 10 } },
+      ]),
+    );
+    vi.spyOn(
+      ragToolHandlers,
+      'get_shelter_capacity',
+    ).mockRejectedValueOnce(new Error('unexpected failure'));
+
+    const result = await service.query('Shelters?', {
+      userId: coordinator.user.id,
+      userRole: 'DISASTER_COORDINATOR',
+      requestId: 'req-rag-thrown',
+    });
+
+    expect(result.tool_calls).toEqual([
+      expect.objectContaining({
+        tool: 'get_shelter_capacity',
+        outcome: 'ERROR',
+        returned_count: 0,
+        truncated: false,
+      }),
+    ]);
+    expect(result.live_evidence).toBeUndefined();
+
+    const audit = await prisma.auditLog.findFirst({
+      where: { action: 'RAG_TOOL_CALL' },
+    });
+    expect(audit?.metadata).toMatchObject({
+      tool: 'get_shelter_capacity',
+      authorization: 'ALLOWED',
+      outcome: 'ERROR',
+      error_code: 'EXECUTION_ERROR',
+    });
+  });
+
+  it('audits an unverifiable tool context without executing tools', async () => {
+    const citizen = await createAuthedUser('CITIZEN');
+    const service = new RagService(
+      providerWith([
+        { tool: 'get_shelter_capacity', arguments: { limit: 10 } },
+      ]),
+    );
+
+    const result = await service.query('Shelters?', {
+      userId: citizen.user.id,
+      userRole: 'ADMINISTRATOR',
+      requestId: 'req-rag-context-fail',
+    });
+
+    expect(result.rag_version).toBe('rag-v2');
+    expect(result.tool_calls).toEqual([]);
+    expect(result.live_evidence).toBeUndefined();
+
+    const turnAudit = await prisma.auditLog.findFirst({
+      where: { action: 'RAG_QUERY' },
+    });
+    expect(turnAudit?.metadata).toMatchObject({
+      tool_context_error: 'INVALID_CONTEXT',
+    });
+    expect(
+      await prisma.auditLog.count({ where: { action: 'RAG_TOOL_CALL' } }),
+    ).toBe(0);
+  });
+
   it('does not return live evidence when the tool audit cannot be written', async () => {
     const coordinator = await createAuthedUser('DISASTER_COORDINATOR');
     await createShelter({ name: 'Audit Shelter' });
@@ -254,6 +431,29 @@ describe('RAG live-tool orchestration', () => {
       }),
     ]);
     expect(result.live_evidence).toBeUndefined();
+  });
+
+  it('returns the provider response when the turn audit cannot be written', async () => {
+    const coordinator = await createAuthedUser('DISASTER_COORDINATOR');
+    const service = new RagService(providerWith([]));
+
+    vi.spyOn(prisma.auditLog, 'create').mockRejectedValue(
+      new Error('audit unavailable'),
+    );
+
+    const result = await service.query('Document question?', {
+      userId: coordinator.user.id,
+      userRole: 'DISASTER_COORDINATOR',
+      requestId: 'req-rag-turn-audit-fail',
+    });
+
+    expect(result).toEqual({
+      status: 'GROUNDED',
+      answer: 'Document answer.',
+      citations: [],
+      tool_calls: [],
+      rag_version: 'rag-v1',
+    });
   });
 
   it('keeps RAG 1.0 behavior when no authenticated context is supplied', async () => {

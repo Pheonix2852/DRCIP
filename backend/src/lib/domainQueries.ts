@@ -149,7 +149,8 @@ export async function queryIncidentList(opts: {
 
 export type ResourceAccessScope =
   | { kind: 'ALL' }
-  | { kind: 'OWN_TEAM'; userId: string };
+  | { kind: 'OWN_TEAM'; userId: string }
+  | { kind: 'INCIDENT_SCOPE'; userId: string; radiusKm: number };
 
 export interface ResourceRow {
   id: string;
@@ -232,6 +233,23 @@ export function buildResourceWhere(
   }
   if (scope.kind === 'OWN_TEAM') {
     conditions.push(Prisma.sql`t."leaderUserId" = ${scope.userId}`);
+  }
+  if (scope.kind === 'INCIDENT_SCOPE') {
+    // A Field Officer may only see resources that are also within the radius of
+    // an active incident their own team is assigned to. This is an intersection
+    // with the caller's search circle, never a replacement for it.
+    const radiusMeters = scope.radiusKm * 1000;
+    conditions.push(Prisma.sql`EXISTS (
+      SELECT 1
+      FROM "Assignment" a
+      JOIN "FieldTeam" ft ON a."fieldTeamId" = ft.id
+      JOIN "Incident" i ON a."incidentId" = i.id
+      WHERE ft."leaderUserId" = ${scope.userId}
+        AND a."status" IN ('ASSIGNED', 'IN_PROGRESS')
+        AND i."status" <> 'RESOLVED'
+        AND i."location" IS NOT NULL
+        AND ST_DWithin(i."location", r."location", ${radiusMeters})
+    )`);
   }
 
   return conditions.length > 0 ? Prisma.sql`${Prisma.join(conditions, ' AND ')}` : Prisma.sql`TRUE`;

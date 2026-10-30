@@ -43,6 +43,7 @@ import {
 import type { TeamWithRelations } from '../lib/teamSerializer';
 import {
   authorizeRagTool,
+  type RagToolAuthorization,
   type RagToolContext,
 } from './ragToolAuthorization';
 
@@ -55,6 +56,7 @@ type SerializedAssignment = Awaited<ReturnType<typeof queryAssignments>>['items'
 type RagToolHandler<T extends RagToolName> = (
   ctx: RagToolContext,
   args: RagToolArgumentMap[T],
+  authorization: RagToolAuthorization,
 ) => Promise<RagToolResult<T>>;
 
 function iso(value: Date | null): string | null {
@@ -215,8 +217,8 @@ function toAssignmentRecord(a: SerializedAssignment): RagAssignmentRecord {
 async function getActiveIncidents(
   ctx: RagToolContext,
   args: GetActiveIncidentsArgs,
+  authorization: RagToolAuthorization,
 ): Promise<RagToolResult<'get_active_incidents'>> {
-  const authorization = await authorizeRagTool(ctx, 'get_active_incidents', args);
   const asOf = new Date().toISOString();
 
   return runTool('get_active_incidents', asOf, async () => {
@@ -244,8 +246,8 @@ async function getActiveIncidents(
 async function getNearbyAmbulances(
   ctx: RagToolContext,
   args: GetNearbyAmbulancesArgs,
+  authorization: RagToolAuthorization,
 ): Promise<RagToolResult<'get_nearby_ambulances'>> {
-  await authorizeRagTool(ctx, 'get_nearby_ambulances', args);
   const asOf = new Date().toISOString();
 
   return runTool('get_nearby_ambulances', asOf, async () => {
@@ -260,7 +262,14 @@ async function getNearbyAmbulances(
       nearby_radius_km: args.radius_km,
     };
     const { items, total } = await queryResourceList({
-      scope: { kind: 'ALL' },
+      scope:
+        authorization.kind === 'INCIDENT_SCOPE'
+          ? {
+              kind: 'INCIDENT_SCOPE',
+              userId: authorization.userId,
+              radiusKm: authorization.radiusKm,
+            }
+          : { kind: 'ALL' },
       query,
       requesterId: ctx.userId,
     });
@@ -271,8 +280,8 @@ async function getNearbyAmbulances(
 async function getAvailableRescueTeams(
   ctx: RagToolContext,
   args: GetAvailableRescueTeamsArgs,
+  authorization: RagToolAuthorization,
 ): Promise<RagToolResult<'get_available_rescue_teams'>> {
-  const authorization = await authorizeRagTool(ctx, 'get_available_rescue_teams', args);
   const asOf = new Date().toISOString();
 
   return runTool('get_available_rescue_teams', asOf, async () => {
@@ -297,8 +306,8 @@ async function getAvailableRescueTeams(
 async function getShelterCapacity(
   ctx: RagToolContext,
   args: GetShelterCapacityArgs,
+  authorization: RagToolAuthorization,
 ): Promise<RagToolResult<'get_shelter_capacity'>> {
-  const authorization = await authorizeRagTool(ctx, 'get_shelter_capacity', args);
   const asOf = new Date().toISOString();
 
   return runTool('get_shelter_capacity', asOf, async () => {
@@ -337,8 +346,8 @@ async function getShelterCapacity(
 async function getResourceStock(
   ctx: RagToolContext,
   args: GetResourceStockArgs,
+  _authorization: RagToolAuthorization,
 ): Promise<RagToolResult<'get_resource_stock'>> {
-  await authorizeRagTool(ctx, 'get_resource_stock', args);
   const asOf = new Date().toISOString();
 
   return runTool('get_resource_stock', asOf, async () => {
@@ -367,8 +376,8 @@ async function getResourceStock(
 async function getCurrentAssignments(
   ctx: RagToolContext,
   args: GetCurrentAssignmentsArgs,
+  authorization: RagToolAuthorization,
 ): Promise<RagToolResult<'get_current_assignments'>> {
-  const authorization = await authorizeRagTool(ctx, 'get_current_assignments', args);
   const asOf = new Date().toISOString();
 
   return runTool('get_current_assignments', asOf, async () => {
@@ -403,11 +412,21 @@ export const ragToolHandlers: { [T in RagToolName]: RagToolHandler<T> } = {
   get_current_assignments: getCurrentAssignments,
 };
 
+export async function runRagTool<T extends RagToolName>(
+  ctx: RagToolContext,
+  tool: T,
+  args: RagToolArgumentMap[T],
+  authorization: RagToolAuthorization,
+): Promise<RagToolResult<T>> {
+  return ragToolHandlers[tool](ctx, args, authorization);
+}
+
 export async function executeRagTool<T extends RagToolName>(
   ctx: RagToolContext,
   tool: T,
   rawArguments: unknown,
 ): Promise<RagToolResult<T>> {
   const args = ragToolArgumentSchemas[tool].parse(rawArguments) as RagToolArgumentMap[T];
-  return ragToolHandlers[tool](ctx, args);
+  const authorization = await authorizeRagTool(ctx, tool, args);
+  return runRagTool(ctx, tool, args, authorization);
 }
