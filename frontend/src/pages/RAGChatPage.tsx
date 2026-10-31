@@ -1,12 +1,13 @@
 import { useRef, useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { BookOpen, Send } from 'lucide-react'
-import type { RagCitation, RagQueryResponse } from '@drcip/contracts'
+import type { RagCitation, RagQueryResponse, RagToolCall } from '@drcip/contracts'
 import { rag } from '../lib/rag'
 import { PageHeader } from '../components/PageHeader'
 import { LoadingState } from '../components/LoadingState'
 import { ErrorState } from '../components/ErrorState'
 import { EmptyState } from '../components/EmptyState'
+import { StatusBadge } from '../components/StatusBadge'
 import { UnavailableState } from '../components/UnavailableState'
 import { Button } from './ui/button'
 import { Label } from './ui/label'
@@ -46,6 +47,68 @@ function Citations({ citations }: { citations: RagCitation[] }) {
   )
 }
 
+const TOOL_LABELS: Record<string, string> = {
+  get_active_incidents: 'Active incidents',
+  get_nearby_ambulances: 'Nearby ambulances',
+  get_available_rescue_teams: 'Available rescue teams',
+  get_shelter_capacity: 'Shelter capacity',
+  get_resource_stock: 'Resource stock',
+  get_current_assignments: 'Current assignments',
+}
+
+function toolLabel(tool: string): string {
+  return TOOL_LABELS[tool] ?? tool
+}
+
+function evidenceKey(call: RagToolCall): string {
+  return [call.tool, call.outcome, call.as_of, call.returned_count, call.truncated].join('|')
+}
+
+function LiveEvidence({ response }: { response: RagQueryResponse }) {
+  if (response.tool_calls.length === 0) return null
+
+  const evidence = new Set((response.live_evidence ?? []).map(evidenceKey))
+
+  return (
+    <section aria-label="Live operational data" className="mt-3 border-t border-border pt-3">
+      <p className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
+        Live operational data
+      </p>
+      <ul className="mt-1 space-y-2 text-sm">
+        {response.tool_calls.map((call, index) => {
+          const isEvidence = evidence.has(evidenceKey(call))
+          return (
+            <li
+              key={`${call.tool}-${call.as_of}-${index}`}
+              data-testid="rag-live-evidence"
+              className="rounded-drcip-md border border-border px-3 py-2"
+            >
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-medium text-ink">{toolLabel(call.tool)}</span>
+                <StatusBadge status={call.outcome} />
+                <span className="text-xs text-text-muted">
+                  Observed{' '}
+                  <time dateTime={call.as_of}>{new Date(call.as_of).toLocaleString()}</time>
+                </span>
+              </div>
+              <p className="mt-1 text-xs text-text-secondary">
+                {call.outcome === 'SUCCESS' &&
+                  `${call.returned_count} record(s) returned${call.truncated ? ' · truncated' : ''}`}
+                {call.outcome === 'EMPTY' && 'No matching operational records were returned.'}
+                {call.outcome === 'UNAVAILABLE' && 'Live operational data is temporarily unavailable.'}
+                {call.outcome === 'ERROR' && 'Live operational data could not be retrieved.'}
+              </p>
+              {isEvidence && (
+                <p className="mt-1 text-xs text-text-muted">Live operational data, not a document citation.</p>
+              )}
+            </li>
+          )
+        })}
+      </ul>
+    </section>
+  )
+}
+
 function RagResponse({
   response,
   onRetry,
@@ -71,21 +134,27 @@ function RagResponse({
   }
 
   const abstained = response.status === 'ABSTAINED'
+  const hasLiveEvidence = (response.live_evidence?.length ?? 0) > 0
   return (
     <div data-testid="rag-response" className="rounded-drcip-lg border border-border bg-surface px-4 py-3">
       <p
         className={
           abstained
-            ? 'text-xs font-medium text-status-warning'
+            ? hasLiveEvidence
+              ? 'text-xs font-medium text-status-info'
+              : 'text-xs font-medium text-status-warning'
             : 'text-xs font-medium text-status-success'
         }
       >
         {abstained
-          ? 'Insufficient evidence in the approved knowledge base'
+          ? hasLiveEvidence
+            ? 'Insufficient document evidence · live operational data shown'
+            : 'Insufficient evidence in the approved knowledge base'
           : 'Answer supported by approved sources'}
       </p>
       <p className="mt-2 whitespace-pre-wrap text-sm text-ink">{response.answer}</p>
       {!abstained && <Citations citations={response.citations} />}
+      <LiveEvidence response={response} />
     </div>
   )
 }
@@ -140,7 +209,7 @@ export function RAGChatPage() {
     <div className="mx-auto max-w-3xl space-y-4">
       <PageHeader
         title="RAG Assistant"
-        description="Ask about approved disaster-response guidance. Answers include sources when evidence is available."
+        description="Ask about approved disaster-response guidance. Answers include sources and, when available, clearly labelled live operational data."
       />
 
       <div
@@ -153,7 +222,7 @@ export function RAGChatPage() {
         {turns.length === 0 && (
           <EmptyState
             title="Ask about approved disaster-response guidance"
-            description="RAG 1.0 answers from approved DRCIP knowledge sources only. It does not use live operational data or dispatch emergency resources."
+            description="Answers use approved DRCIP knowledge sources and, when available for your role, clearly labelled live operational data. AI does not dispatch emergency resources."
           />
         )}
 
@@ -199,7 +268,7 @@ export function RAGChatPage() {
         />
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p id="rag-question-help" className="text-xs text-text-muted">
-            Approved documents only. {QUERY_MIN}-{QUERY_MAX} characters.
+            Approved guidance and labelled live data. {QUERY_MIN}-{QUERY_MAX} characters.
           </p>
           <Button type="submit" disabled={mutation.isPending}>
             <Send aria-hidden="true" className="h-4 w-4" />
@@ -215,7 +284,7 @@ export function RAGChatPage() {
 
       <p className="flex items-center gap-1.5 text-xs text-text-muted">
         <BookOpen aria-hidden="true" className="h-3.5 w-3.5" />
-        Approved-document guidance only. AI does not dispatch resources.
+        Approved guidance and labelled live data only. AI does not dispatch resources.
       </p>
     </div>
   )

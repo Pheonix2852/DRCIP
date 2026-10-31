@@ -280,8 +280,8 @@ export interface RagCitation {
 }
 
 // ---------------------------------------------------------------------------
-// RAG 2.0 live-tool contract (frozen; tools are not implemented in v1)
-// See docs/05_API_Contract.md #14 and docs/02_Functional_Specification.md #12
+// RAG 2.0 live-tool contract (implemented)
+// See docs/02_Functional_Specification.md #12, docs/05_API_Contract.md #14
 // ---------------------------------------------------------------------------
 
 export type ActiveIncidentStatus = Exclude<IncidentStatus, 'RESOLVED'>;
