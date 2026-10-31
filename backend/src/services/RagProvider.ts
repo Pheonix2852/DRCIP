@@ -1,4 +1,9 @@
-import type { RagCitation, RagResponseStatus, RagToolInvocation } from '@drcip/contracts';
+import type {
+  RagCitation,
+  RagResponseStatus,
+  RagToolName,
+  RagToolOutcome,
+} from '@drcip/contracts';
 
 export const RAG_VERSION = 'rag-v1';
 export const RAG_VERSION_V2 = 'rag-v2';
@@ -13,17 +18,68 @@ export const RAG_UNAVAILABLE_ANSWER =
 
 export type RagProviderStatus = Extract<RagResponseStatus, 'GROUNDED' | 'ABSTAINED' | 'UNAVAILABLE'>;
 
+// Approved definitions are supplied by Node. Python may only propose tools
+// from this list; Node validates, authorizes and executes every proposal.
+export interface RagProviderToolDefinition {
+  name: RagToolName;
+  description: string;
+  parameters: Record<string, unknown>;
+}
+
+export interface RagProviderQueryOptions {
+  tools?: RagProviderToolDefinition[];
+}
+
+// Raw proposal from the Python service. It is intentionally untyped: Node's
+// schema and authorization layers are the authority, so malformed or unknown
+// proposals reach the validator and are audited instead of being dropped.
+export interface RagToolProposal {
+  id?: unknown;
+  tool: unknown;
+  arguments: unknown;
+}
+
+// Complete aggregate over the authorized dataset, independent of any result
+// page. Only tools that support aggregation populate this.
+export interface RagToolAggregate {
+  shelter_count: number;
+  counted_shelters: number;
+  unknown_capacity_count: number;
+  total_capacity: number;
+  current_occupancy: number;
+  available_capacity: number;
+  as_of: string;
+}
+
+// Envelope sent back to Python for continuation and final synthesis.
+export interface RagProviderToolResult {
+  call_id: string | null;
+  tool: RagToolName | 'INVALID';
+  outcome: RagToolOutcome;
+  as_of: string;
+  returned_count: number;
+  truncated: boolean;
+  records: unknown[];
+  aggregate?: RagToolAggregate;
+  message?: string;
+}
+
 export interface RagProviderResult {
   status: RagProviderStatus;
   answer: string;
   citations: RagCitation[];
   // Optional model-requested live tools. The provider only proposes calls; the
   // Node boundary validates, authorizes and executes them.
-  tool_invocations?: RagToolInvocation[];
+  tool_invocations?: RagToolProposal[];
 }
 
 export interface RagProvider {
-  query(question: string): Promise<RagProviderResult>;
+  query(question: string, options?: RagProviderQueryOptions): Promise<RagProviderResult>;
+  // Optional continuation round. Providers that support RAG 2.0 implement this.
+  continue?(
+    question: string,
+    toolResults: RagProviderToolResult[],
+  ): Promise<RagProviderResult>;
 }
 
 export function ragUnavailable(): RagProviderResult {

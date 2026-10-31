@@ -20,14 +20,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-# ── Patch heavy imports BEFORE the app is imported ───────────────────────────
-# This prevents sentence-transformers from loading during test collection.
-with (
-    patch("sentence_transformers.SentenceTransformer"),
-    patch("app.services.embedder._load_model"),
-):
-    from app.dependencies import get_groq_client, get_qdrant_client
-    from app.main import app
+from app.dependencies import get_groq_client, get_qdrant_client
+from app.main import app
 
 VALID_KEY = "test_bearer_key_123"
 AUTH = {"Authorization": f"Bearer {VALID_KEY}"}
@@ -211,6 +205,149 @@ class TestQueryLogic:
         # page 7 should appear only once
         assert pages.count(7) == 1
         assert 8 in pages
+
+
+class TestToolProposalAndSynthesis:
+    def test_approved_proposal_is_returned_without_execution(
+        self, api_client, mock_qdrant_client, mock_groq_client, mock_embed
+    ):
+        mock_qdrant_client.query_points.return_value = SimpleNamespace(points=[])
+        tool_call = SimpleNamespace(
+            id="call_1",
+            function=SimpleNamespace(
+                name="get_active_incidents",
+                arguments='{"status":"ACTIVE"}',
+            ),
+        )
+        choice = SimpleNamespace(
+            message=SimpleNamespace(content="", tool_calls=[tool_call])
+        )
+        mock_groq_client.chat.completions.create.return_value = SimpleNamespace(choices=[choice])
+
+        r = api_client.post(
+            "/query",
+            json={
+                "question": "How many active incidents are there?",
+                "tools": [
+                    {
+                        "name": "get_active_incidents",
+                        "description": "List active incidents.",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {"status": {"type": "string"}},
+                        },
+                    }
+                ],
+            },
+            headers=AUTH,
+        )
+
+        assert r.status_code == 200
+        assert r.json()["tool_calls"] == [
+            {
+                "id": "call_1",
+                "name": "get_active_incidents",
+                "arguments": {"status": "ACTIVE"},
+            }
+        ]
+
+    def test_unknown_proposal_is_dropped(
+        self, api_client, mock_qdrant_client, mock_groq_client, mock_embed
+    ):
+        mock_qdrant_client.query_points.return_value = SimpleNamespace(points=[])
+        tool_call = SimpleNamespace(
+            id="call_1",
+            function=SimpleNamespace(
+                name="execute_sql",
+                arguments='{"query":"select 1"}',
+            ),
+        )
+        choice = SimpleNamespace(
+            message=SimpleNamespace(content="", tool_calls=[tool_call])
+        )
+        mock_groq_client.chat.completions.create.return_value = SimpleNamespace(choices=[choice])
+
+        r = api_client.post(
+            "/query",
+            json={
+                "question": "How many active incidents are there?",
+                "tools": [
+                    {
+                        "name": "get_active_incidents",
+                        "description": "List active incidents.",
+                        "parameters": {"type": "object", "properties": {}},
+                    }
+                ],
+            },
+            headers=AUTH,
+        )
+
+        assert r.status_code == 200
+        data = r.json()
+        assert data["tool_calls"] == []
+        assert "could not find" in data["answer"].lower()
+
+    def test_continuation_synthesizes_from_tool_results(
+        self, api_client, mock_qdrant_client, mock_groq_client, mock_embed
+    ):
+        mock_qdrant_client.query_points.return_value = SimpleNamespace(points=[])
+        choice = SimpleNamespace(
+            message=SimpleNamespace(content="There is 1 active incident.")
+        )
+        mock_groq_client.chat.completions.create.return_value = SimpleNamespace(choices=[choice])
+
+        r = api_client.post(
+            "/query",
+            json={
+                "question": "How many active incidents are there?",
+                "tool_results": [
+                    {
+                        "call_id": "call_1",
+                        "tool": "get_active_incidents",
+                        "outcome": "SUCCESS",
+                        "as_of": "2026-10-31T00:00:00.000Z",
+                        "returned_count": 1,
+                        "records": [{"id": "inc-1"}],
+                    }
+                ],
+            },
+            headers=AUTH,
+        )
+
+        assert r.status_code == 200
+        assert r.json()["answer"] == "There is 1 active incident."
+
+    def test_continuation_does_not_accept_invented_answer_without_live_data(
+        self, api_client, mock_qdrant_client, mock_groq_client, mock_embed
+    ):
+        from app.services.generator import LIVE_LIMITATION
+
+        mock_qdrant_client.query_points.return_value = SimpleNamespace(points=[])
+        choice = SimpleNamespace(
+            message=SimpleNamespace(content="There are 5 active incidents.")
+        )
+        mock_groq_client.chat.completions.create.return_value = SimpleNamespace(choices=[choice])
+
+        r = api_client.post(
+            "/query",
+            json={
+                "question": "How many active incidents are there?",
+                "tool_results": [
+                    {
+                        "call_id": "call_1",
+                        "tool": "get_active_incidents",
+                        "outcome": "UNAVAILABLE",
+                        "as_of": "2026-10-31T00:00:00.000Z",
+                        "returned_count": 0,
+                        "records": [],
+                    }
+                ],
+            },
+            headers=AUTH,
+        )
+
+        assert r.status_code == 200
+        assert r.json()["answer"] == LIVE_LIMITATION
 
 
 class TestUpstreamFailures:

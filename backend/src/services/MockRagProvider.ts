@@ -1,10 +1,17 @@
-import { RagProvider, RagProviderResult } from './RagProvider';
+import {
+  RagProvider,
+  RagProviderQueryOptions,
+  RagProviderResult,
+} from './RagProvider';
 
 const MOCK_ABSTENTION_ANSWER =
   'I could not find sufficient support in the approved DRCIP knowledge base to answer that reliably.';
 
 export class MockRagProvider implements RagProvider {
-  async query(question: string): Promise<RagProviderResult> {
+  async query(
+    question: string,
+    _options?: RagProviderQueryOptions,
+  ): Promise<RagProviderResult> {
     if (question.trim() === '') {
       return { status: 'ABSTAINED', answer: MOCK_ABSTENTION_ANSWER, citations: [] };
     }

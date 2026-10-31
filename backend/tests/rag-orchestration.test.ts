@@ -33,11 +33,29 @@ function providerWith(
   };
 }
 
+let restoreAuditCreate: (() => void) | undefined;
+
+// Prisma delegates are proxies whose property descriptors report the real
+// methods as undefined, so vi.spyOn cannot restore them. Assign and restore
+// the delegate method directly instead.
+function failNextAuditWrite() {
+  const original = prisma.auditLog.create;
+  (prisma.auditLog as unknown as { create: typeof original }).create = vi
+    .fn()
+    .mockRejectedValueOnce(new Error('audit unavailable')) as typeof original;
+  restoreAuditCreate = () => {
+    (prisma.auditLog as unknown as { create: typeof original }).create =
+      original;
+    restoreAuditCreate = undefined;
+  };
+}
+
 beforeEach(async () => {
   await truncateTables();
 });
 
 afterEach(() => {
+  restoreAuditCreate?.();
   vi.restoreAllMocks();
 });
 
@@ -306,7 +324,7 @@ describe('RAG live-tool orchestration', () => {
       ]),
     );
 
-    vi.spyOn(prisma, '$queryRaw').mockRejectedValue(
+    vi.spyOn(prisma, '$queryRaw').mockRejectedValueOnce(
       new Error('database unavailable'),
     );
 
@@ -413,9 +431,7 @@ describe('RAG live-tool orchestration', () => {
       ]),
     );
 
-    vi.spyOn(prisma.auditLog, 'create').mockRejectedValue(
-      new Error('audit unavailable'),
-    );
+    failNextAuditWrite();
 
     const result = await service.query('Shelters?', {
       userId: coordinator.user.id,
@@ -437,9 +453,7 @@ describe('RAG live-tool orchestration', () => {
     const coordinator = await createAuthedUser('DISASTER_COORDINATOR');
     const service = new RagService(providerWith([]));
 
-    vi.spyOn(prisma.auditLog, 'create').mockRejectedValue(
-      new Error('audit unavailable'),
-    );
+    failNextAuditWrite();
 
     const result = await service.query('Document question?', {
       userId: coordinator.user.id,
@@ -475,3 +489,179 @@ describe('RAG live-tool orchestration', () => {
     expect(await prisma.auditLog.count()).toBe(0);
   });
 });
+
+function providerWithContinuation(
+  toolInvocations: unknown[],
+  continuation: RagProviderResult | Error,
+) {
+  return {
+    query: vi.fn().mockResolvedValue({
+      status: 'ABSTAINED',
+      answer: '',
+      citations: [],
+      tool_invocations:
+        toolInvocations as RagProviderResult['tool_invocations'],
+    }),
+    continue:
+      continuation instanceof Error
+        ? vi.fn().mockRejectedValue(continuation)
+        : vi.fn().mockResolvedValue(continuation),
+  };
+}
+
+describe('RAG tool continuation', () => {
+  it('passes the approved tool definitions to the provider', async () => {
+    const provider = {
+      query: vi.fn().mockResolvedValue({
+        status: 'ABSTAINED',
+        answer: '',
+        citations: [],
+      }),
+    };
+    const service = new RagService(provider);
+
+    await service.query('What now?');
+
+    const options = provider.query.mock.calls[0][1];
+    expect(options.tools.map((tool: { name: string }) => tool.name)).toEqual([
+      'get_active_incidents',
+      'get_nearby_ambulances',
+      'get_available_rescue_teams',
+      'get_shelter_capacity',
+      'get_resource_stock',
+      'get_current_assignments',
+    ]);
+  });
+
+  it('continues with tool-result envelopes and uses the synthesized answer', async () => {
+    const coordinator = await createAuthedUser('DISASTER_COORDINATOR');
+    await createShelter({
+      name: 'Continuation Shelter',
+      total_capacity: 100,
+      current_occupancy: 20,
+    });
+    const provider = providerWithContinuation(
+      [{ tool: 'get_shelter_capacity', arguments: { limit: 10 } }],
+      {
+        status: 'ABSTAINED',
+        answer: 'The total shelter capacity is 100.',
+        citations: [],
+      },
+    );
+    const service = new RagService(provider);
+
+    const result = await service.query('What is the total shelter capacity?', {
+      userId: coordinator.user.id,
+      userRole: 'DISASTER_COORDINATOR',
+      requestId: 'req-rag-continuation',
+    });
+
+    expect(result.status).toBe('GROUNDED');
+    expect(result.answer).toBe('The total shelter capacity is 100.');
+    expect(result.tool_calls).toHaveLength(1);
+    expect(result.live_evidence).toHaveLength(1);
+
+    const [, toolResults] = provider.continue.mock.calls[0];
+    expect(toolResults[0]).toMatchObject({
+      call_id: 'call_1',
+      tool: 'get_shelter_capacity',
+      outcome: 'SUCCESS',
+      returned_count: 1,
+      truncated: false,
+    });
+    expect(toolResults[0].aggregate).toMatchObject({
+      shelter_count: 1,
+      counted_shelters: 1,
+      unknown_capacity_count: 0,
+      total_capacity: 100,
+      current_occupancy: 20,
+      available_capacity: 80,
+    });
+    expect(toolResults[0].aggregate.as_of).toEqual(toolResults[0].as_of);
+  });
+
+  it('aggregates every authorized shelter even when the record list is capped', async () => {
+    const coordinator = await createAuthedUser('DISASTER_COORDINATOR');
+    await createShelter({ name: 'A', total_capacity: 10 });
+    await createShelter({ name: 'B', total_capacity: 20 });
+    await createShelter({ name: 'C', total_capacity: 30 });
+    const provider = providerWithContinuation(
+      [{ tool: 'get_shelter_capacity', arguments: { limit: 1 } }],
+      { status: 'ABSTAINED', answer: 'Total is 60.', citations: [] },
+    );
+    const service = new RagService(provider);
+
+    await service.query('Total shelter capacity?', {
+      userId: coordinator.user.id,
+      userRole: 'DISASTER_COORDINATOR',
+      requestId: 'req-rag-aggregate',
+    });
+
+    const [, toolResults] = provider.continue.mock.calls[0];
+    expect(toolResults[0]).toMatchObject({
+      returned_count: 1,
+      truncated: true,
+    });
+    expect(toolResults[0].aggregate).toMatchObject({
+      shelter_count: 3,
+      counted_shelters: 3,
+      total_capacity: 60,
+      available_capacity: 60,
+    });
+  });
+
+  it('ignores recursive tool proposals from a continuation response', async () => {
+    const coordinator = await createAuthedUser('DISASTER_COORDINATOR');
+    await createShelter({ name: 'Recursive Shelter' });
+    const provider = providerWithContinuation(
+      [{ tool: 'get_shelter_capacity', arguments: { limit: 1 } }],
+      {
+        status: 'ABSTAINED',
+        answer: 'Answer.',
+        citations: [],
+        tool_invocations: [
+          { tool: 'get_shelter_capacity', arguments: { limit: 1 } },
+        ],
+      },
+    );
+    const service = new RagService(provider);
+
+    const result = await service.query('Shelters?', {
+      userId: coordinator.user.id,
+      userRole: 'DISASTER_COORDINATOR',
+      requestId: 'req-rag-recursive',
+    });
+
+    expect(result.tool_calls).toHaveLength(1);
+    expect(
+      await prisma.auditLog.count({ where: { action: 'RAG_TOOL_CALL' } }),
+    ).toBe(1);
+    const turnAudit = await prisma.auditLog.findFirst({
+      where: { action: 'RAG_QUERY' },
+    });
+    expect(turnAudit?.metadata).toMatchObject({
+      recursive_tool_calls_ignored: 1,
+    });
+  });
+
+  it('falls back to live evidence when continuation synthesis fails', async () => {
+    const coordinator = await createAuthedUser('DISASTER_COORDINATOR');
+    await createShelter({ name: 'Fallback Shelter' });
+    const provider = providerWithContinuation(
+      [{ tool: 'get_shelter_capacity', arguments: { limit: 10 } }],
+      new Error('synthesis unavailable'),
+    );
+    const service = new RagService(provider);
+
+    const result = await service.query('Shelters?', {
+      userId: coordinator.user.id,
+      userRole: 'DISASTER_COORDINATOR',
+      requestId: 'req-rag-continuation-fail',
+    });
+
+    expect(result.status).toBe('GROUNDED');
+    expect(result.answer).toContain('Live operational data was retrieved');
+    expect(result.live_evidence).toHaveLength(1);
+  });
+});
+

@@ -58,6 +58,60 @@ describe('HostedRagProvider request', () => {
     expect(JSON.parse(String(init.body))).toEqual({ question: 'What now?' });
   });
 
+  it('sends approved tool definitions alongside the question', async () => {
+    fetchMock.mockResolvedValue(response(providerPayload()));
+
+    const tools = [
+      {
+        name: 'get_shelter_capacity' as const,
+        description: 'Shelter capacity.',
+        parameters: { type: 'object', properties: {} },
+      },
+    ];
+    await provider().query('What now?', { tools });
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(String(init.body))).toEqual({
+      question: 'What now?',
+      tools,
+    });
+  });
+
+  it('sends tool results in a continuation request', async () => {
+    fetchMock.mockResolvedValue(
+      response(providerPayload({ answer: 'Total capacity is 120.', sources: [] })),
+    );
+
+    const toolResults = [
+      {
+        call_id: 'call_1',
+        tool: 'get_shelter_capacity' as const,
+        outcome: 'SUCCESS' as const,
+        as_of: '2026-10-31T00:00:00.000Z',
+        returned_count: 1,
+        truncated: false,
+        records: [{ id: 'shelter-1' }],
+        aggregate: {
+          shelter_count: 1,
+          counted_shelters: 1,
+          unknown_capacity_count: 0,
+          total_capacity: 120,
+          current_occupancy: 20,
+          available_capacity: 100,
+          as_of: '2026-10-31T00:00:00.000Z',
+        },
+      },
+    ];
+    const result = await provider().continue('What now?', toolResults);
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(String(init.body))).toEqual({
+      question: 'What now?',
+      tool_results: toolResults,
+    });
+    expect(result.answer).toBe('Total capacity is 120.');
+  });
+
   it('returns UNAVAILABLE without calling the provider when no API key is configured', async () => {
     const result = await new HostedRagProvider({
       baseUrl: BASE_URL,
@@ -164,7 +218,7 @@ describe('HostedRagProvider response mapping', () => {
     ]);
   });
 
-  it('maps malformed tool calls to UNAVAILABLE without executing them', async () => {
+  it('passes unknown tool proposals through for Node validation and audit', async () => {
     fetchMock.mockResolvedValue(
       response(
         providerPayload({
@@ -175,8 +229,10 @@ describe('HostedRagProvider response mapping', () => {
 
     const result = await provider().query('What now?');
 
-    expect(result.status).toBe('UNAVAILABLE');
-    expect(result.tool_invocations).toBeUndefined();
+    expect(result.status).toBe('GROUNDED');
+    expect(result.tool_invocations).toEqual([
+      { tool: 'execute_sql', arguments: { query: 'select 1' } },
+    ]);
   });
 
   it('keeps an optional provider title when supplied', async () => {

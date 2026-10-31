@@ -16,8 +16,11 @@ import {
   RAG_VERSION_V2,
   RagProvider,
   RagProviderResult,
+  RagProviderToolResult,
+  RagToolProposal,
   ragUnavailable,
 } from './RagProvider';
+import { RAG_TOOL_DEFINITIONS } from './ragToolDefinitions';
 import {
   authorizeRagTool,
   RagToolAuthorizationError,
@@ -138,18 +141,48 @@ function toToolCall(result: {
   };
 }
 
+function proposalCallId(invocation: unknown, index: number): string {
+  if (typeof invocation === 'object' && invocation !== null) {
+    const id = (invocation as { id?: unknown }).id;
+    if (typeof id === 'string' && id.trim() !== '') return id;
+  }
+  return `call_${index + 1}`;
+}
+
+function errorEnvelope(
+  callId: string,
+  tool: RagToolName | 'INVALID',
+  asOf: string,
+  message: string,
+): RagProviderToolResult {
+  return {
+    call_id: callId,
+    tool,
+    outcome: 'ERROR',
+    as_of: asOf,
+    returned_count: 0,
+    truncated: false,
+    records: [],
+    message,
+  };
+}
+
+interface ExecutedInvocation {
+  call?: RagToolCall;
+  evidence?: RagLiveEvidence;
+  result: RagProviderToolResult;
+}
+
 async function executeInvocation(
   ctx: RagToolContext,
-  invocation: unknown,
+  invocation: RagToolProposal,
   context: RagQueryContext,
-): Promise<{ call?: RagToolCall; evidence?: RagLiveEvidence }> {
+  index: number,
+): Promise<ExecutedInvocation> {
   const startedAt = Date.now();
   const observedAt = new Date().toISOString();
-  const rawTool =
-    typeof invocation === 'object' && invocation !== null
-      ? (invocation as { tool?: unknown }).tool
-      : undefined;
-  const parsedTool = ragToolNameSchema.safeParse(rawTool);
+  const callId = proposalCallId(invocation, index);
+  const parsedTool = ragToolNameSchema.safeParse(invocation.tool);
 
   if (!parsedTool.success) {
     await auditToolCall({
@@ -163,7 +196,14 @@ async function executeInvocation(
       truncated: false,
       durationMs: Date.now() - startedAt,
     });
-    return {};
+    return {
+      result: errorEnvelope(
+        callId,
+        'INVALID',
+        observedAt,
+        'The requested operation is not available.',
+      ),
+    };
   }
 
   const parsedInvocation = ragToolInvocationSchema.safeParse(invocation);
@@ -186,7 +226,15 @@ async function executeInvocation(
       truncated: call.truncated,
       durationMs: Date.now() - startedAt,
     });
-    return { call };
+    return {
+      call,
+      result: errorEnvelope(
+        callId,
+        parsedTool.data,
+        observedAt,
+        'The requested tool arguments were invalid.',
+      ),
+    };
   }
 
   const tool = parsedInvocation.data.tool;
@@ -218,22 +266,48 @@ async function executeInvocation(
       truncated: call.truncated,
       durationMs: Date.now() - startedAt,
     });
-    return { call };
+    return {
+      call,
+      result: errorEnvelope(
+        callId,
+        tool,
+        observedAt,
+        'The requested operational data is not available to this user.',
+      ),
+    };
   }
 
   let errorCode: string | undefined;
   let call: RagToolCall;
   let evidence: RagLiveEvidence | undefined;
+  let toolResult: RagProviderToolResult;
 
   try {
     const result = await runRagTool(ctx, tool, args, authorization);
     call = toToolCall(result);
+    toolResult = {
+      call_id: callId,
+      tool: result.tool,
+      outcome: result.outcome,
+      as_of: result.as_of,
+      returned_count: result.returned_count,
+      truncated: result.truncated,
+      records: result.records,
+      ...(result.aggregate ? { aggregate: result.aggregate } : {}),
+      ...('message' in result ? { message: result.message } : {}),
+    };
     if (result.outcome === 'SUCCESS' || result.outcome === 'EMPTY') {
       evidence = { evidence_type: 'LIVE_OPERATIONAL_DATA', ...call };
     }
   } catch {
     errorCode = 'EXECUTION_ERROR';
     call = errorCall();
+    toolResult = errorEnvelope(
+      callId,
+      tool,
+      observedAt,
+      'Live operational data is temporarily unavailable.',
+    );
   }
 
   const audited = await auditToolCall({
@@ -256,9 +330,15 @@ async function executeInvocation(
       truncated: false,
     };
     evidence = undefined;
+    toolResult = errorEnvelope(
+      callId,
+      tool,
+      call.as_of,
+      'Live operational data could not be audited.',
+    );
   }
 
-  return { call, evidence };
+  return { call, evidence, result: toolResult };
 }
 
 export class RagService {
@@ -276,7 +356,9 @@ export class RagService {
     let result: RagProviderResult;
 
     try {
-      result = await this.provider.query(question);
+      result = await this.provider.query(question, {
+        tools: [...RAG_TOOL_DEFINITIONS],
+      });
     } catch {
       // A provider must not be able to fail the public contract or leak details.
       result = ragUnavailable();
@@ -328,22 +410,68 @@ export class RagService {
 
     const toolCalls: RagToolCall[] = [];
     const liveEvidence: RagLiveEvidence[] = [];
+    const toolResults: RagProviderToolResult[] = [];
 
-    for (const invocation of invocations) {
-      const executed = await executeInvocation(toolContext, invocation, context);
+    for (const [index, invocation] of invocations.entries()) {
+      const executed = await executeInvocation(
+        toolContext,
+        invocation,
+        context,
+        index,
+      );
+      toolResults.push(executed.result);
       if (executed.call) toolCalls.push(executed.call);
       if (executed.evidence) liveEvidence.push(executed.evidence);
     }
 
+    let continuation: RagProviderResult | undefined;
+    let recursiveToolCallsIgnored = 0;
+    if (typeof this.provider.continue === 'function') {
+      try {
+        continuation = await this.provider.continue(question, toolResults);
+        // Tool execution is single-round by contract. A continuation response
+        // must never trigger another execution loop.
+        recursiveToolCallsIgnored = continuation.tool_invocations?.length ?? 0;
+      } catch {
+        continuation = undefined;
+      }
+    }
+
+    const usableContinuation =
+      continuation && continuation.status !== 'UNAVAILABLE'
+        ? continuation
+        : undefined;
+    const hasLiveEvidence = liveEvidence.length > 0;
+    const continuationAnswer = usableContinuation?.answer.trim() ?? '';
+    const answer =
+      continuationAnswer.length > 0
+        ? usableContinuation!.answer
+        : hasLiveEvidence && base.answer.trim().length === 0
+          ? 'Live operational data was retrieved, but a summary could not be generated. Review the live evidence below.'
+          : base.answer;
+    const citations =
+      usableContinuation && usableContinuation.citations.length > 0
+        ? usableContinuation.citations
+        : base.citations;
+    const status: RagQueryResponse['status'] = hasLiveEvidence
+      ? 'GROUNDED'
+      : usableContinuation?.status === 'GROUNDED' || base.status === 'GROUNDED'
+        ? 'GROUNDED'
+        : 'ABSTAINED';
+
     const response: RagQueryResponse = {
-      ...base,
+      status,
+      answer,
+      citations,
       tool_calls: toolCalls,
       rag_version: RAG_VERSION_V2,
-      ...(liveEvidence.length > 0 ? { live_evidence: liveEvidence } : {}),
+      ...(hasLiveEvidence ? { live_evidence: liveEvidence } : {}),
     };
 
     await auditTurn(context, response, startedAt, {
       requested_tool_calls: invocations.length,
+      continued: Boolean(usableContinuation),
+      recursive_tool_calls_ignored: recursiveToolCallsIgnored,
     });
     return response;
   }

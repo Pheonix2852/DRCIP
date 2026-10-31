@@ -386,6 +386,63 @@ export async function queryShelterList(opts: {
   return { items, total: Number(totalCount[0]?.count ?? 0) };
 }
 
+export interface ShelterAggregateRow {
+  shelter_count: number;
+  counted_shelters: number;
+  unknown_capacity_count: number;
+  total_capacity: string | number | null;
+  current_occupancy: string | number | null;
+  available_capacity: string | number | null;
+}
+
+// Complete server-side aggregate over the same authorized shelter set as the
+// list query. Pagination limits never truncate this result.
+//
+// Capacity semantics:
+//   - total_capacity      sum of valid totalCapacity values
+//   - current_occupancy   sum of valid currentOccupancy values
+//   - available_capacity  sum of max(totalCapacity - currentOccupancy, 0)
+//   - counted_shelters    shelters with both values valid (non-null, >= 0)
+//   - unknown_capacity_count  shelters excluded because a value is missing or
+//                             invalid; they are never treated as zero
+export async function queryShelterAggregate(opts: {
+  scope: ShelterAccessScope;
+  query: ShelterQueryInput;
+}): Promise<{
+  shelter_count: number;
+  counted_shelters: number;
+  unknown_capacity_count: number;
+  total_capacity: number;
+  current_occupancy: number;
+  available_capacity: number;
+}> {
+  const where = buildShelterWhere(opts.query, opts.scope);
+  const valid = Prisma.sql`s."totalCapacity" IS NOT NULL AND s."totalCapacity" >= 0 AND s."currentOccupancy" IS NOT NULL AND s."currentOccupancy" >= 0`;
+  const invalid = Prisma.sql`s."totalCapacity" IS NULL OR s."totalCapacity" < 0 OR s."currentOccupancy" IS NULL OR s."currentOccupancy" < 0`;
+
+  const rows = await prisma.$queryRaw<ShelterAggregateRow[]>(Prisma.sql`
+    SELECT
+      COUNT(*)::int AS shelter_count,
+      COUNT(*) FILTER (WHERE ${valid})::int AS counted_shelters,
+      COUNT(*) FILTER (WHERE ${invalid})::int AS unknown_capacity_count,
+      COALESCE(SUM(s."totalCapacity") FILTER (WHERE ${valid}), 0)::bigint AS total_capacity,
+      COALESCE(SUM(s."currentOccupancy") FILTER (WHERE ${valid}), 0)::bigint AS current_occupancy,
+      COALESCE(SUM(GREATEST(s."totalCapacity" - s."currentOccupancy", 0)) FILTER (WHERE ${valid}), 0)::bigint AS available_capacity
+    FROM "Shelter" s
+    ${where}
+  `);
+
+  const row = rows[0];
+  return {
+    shelter_count: Number(row?.shelter_count ?? 0),
+    counted_shelters: Number(row?.counted_shelters ?? 0),
+    unknown_capacity_count: Number(row?.unknown_capacity_count ?? 0),
+    total_capacity: Number(row?.total_capacity ?? 0),
+    current_occupancy: Number(row?.current_occupancy ?? 0),
+    available_capacity: Number(row?.available_capacity ?? 0),
+  };
+}
+
 export type TeamAccessScope =
   | { kind: 'ALL' }
   | { kind: 'OWN_TEAM'; userId: string };

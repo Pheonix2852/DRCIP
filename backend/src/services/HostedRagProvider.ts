@@ -1,13 +1,12 @@
-import {
-  ragToolInvocationSchema,
-  type RagCitation,
-  type RagToolInvocation,
-} from '@drcip/contracts';
+import type { RagCitation } from '@drcip/contracts';
 import {
   DEFAULT_RAG_SERVICE_URL,
   DEFAULT_RAG_TIMEOUT_MS,
   RagProvider,
+  RagProviderQueryOptions,
   RagProviderResult,
+  RagProviderToolResult,
+  RagToolProposal,
   ragUnavailable,
 } from './RagProvider';
 
@@ -64,16 +63,19 @@ function mapSource(source: unknown): RagCitation | null {
   return citation;
 }
 
-function mapToolInvocation(value: unknown): RagToolInvocation | null {
-  if (typeof value !== 'object' || value === null) return null;
-
+// Keep proposals raw. Node's schema validator and authorization layer decide
+// whether they are acceptable, and invalid proposals are audited rather than
+// silently discarded here.
+function mapProposal(value: unknown): RagToolProposal {
+  if (typeof value !== 'object' || value === null) {
+    return { tool: undefined, arguments: undefined };
+  }
   const raw = value as Record<string, unknown>;
-  const parsed = ragToolInvocationSchema.safeParse({
+  return {
+    id: raw.id,
     tool: raw.tool ?? raw.name,
-    arguments: raw.arguments ?? raw.args ?? {},
-  });
-
-  return parsed.success ? parsed.data : null;
+    arguments: raw.arguments ?? raw.args,
+  };
 }
 
 function mapResponse(payload: unknown): RagProviderResult | null {
@@ -81,7 +83,7 @@ function mapResponse(payload: unknown): RagProviderResult | null {
 
   const body = payload as HostedResponse;
   const answer = nonEmptyString(body.answer);
-  if (!answer || !Array.isArray(body.sources)) return null;
+  if (!Array.isArray(body.sources)) return null;
 
   const citations: RagCitation[] = [];
   for (const source of body.sources) {
@@ -90,22 +92,20 @@ function mapResponse(payload: unknown): RagProviderResult | null {
     citations.push(citation);
   }
 
-  let toolInvocations: RagToolInvocation[] | undefined;
+  let toolInvocations: RagToolProposal[] | undefined;
   if (body.tool_calls !== undefined) {
     if (!Array.isArray(body.tool_calls)) return null;
-    const mapped: RagToolInvocation[] = [];
-    for (const value of body.tool_calls) {
-      const invocation = mapToolInvocation(value);
-      if (!invocation) return null;
-      mapped.push(invocation);
+    if (body.tool_calls.length > 0) {
+      toolInvocations = body.tool_calls.map(mapProposal);
     }
-    if (mapped.length > 0) toolInvocations = mapped;
   }
+
+  if (!answer && !toolInvocations) return null;
 
   const result: RagProviderResult =
     citations.length === 0
-      ? { status: 'ABSTAINED', answer, citations: [] }
-      : { status: 'GROUNDED', answer, citations };
+      ? { status: 'ABSTAINED', answer: answer ?? '', citations: [] }
+      : { status: 'GROUNDED', answer: answer ?? '', citations };
 
   if (toolInvocations) result.tool_invocations = toolInvocations;
   return result;
@@ -137,7 +137,7 @@ export class HostedRagProvider implements RagProvider {
         : DEFAULT_RAG_TIMEOUT_MS;
   }
 
-  async query(question: string): Promise<RagProviderResult> {
+  private async post(payload: Record<string, unknown>): Promise<RagProviderResult> {
     if (!this.apiKey) return ragUnavailable();
 
     try {
@@ -147,18 +147,37 @@ export class HostedRagProvider implements RagProvider {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${this.apiKey}`,
         },
-        body: JSON.stringify({ question }),
+        body: JSON.stringify(payload),
         signal: AbortSignal.timeout(this.timeoutMs),
       });
 
       if (!response.ok) return ragUnavailable();
 
-      const payload = await response.json().catch(() => null);
-      return mapResponse(payload) ?? ragUnavailable();
+      const body = await response.json().catch(() => null);
+      return mapResponse(body) ?? ragUnavailable();
     } catch {
       // Network, timeout and parsing failures are all degraded states. Provider
       // response bodies and request headers must never be logged or returned.
       return ragUnavailable();
     }
+  }
+
+  async query(
+    question: string,
+    options?: RagProviderQueryOptions,
+  ): Promise<RagProviderResult> {
+    return this.post({
+      question,
+      ...(options?.tools && options.tools.length > 0
+        ? { tools: options.tools }
+        : {}),
+    });
+  }
+
+  async continue(
+    question: string,
+    toolResults: RagProviderToolResult[],
+  ): Promise<RagProviderResult> {
+    return this.post({ question, tool_results: toolResults });
   }
 }

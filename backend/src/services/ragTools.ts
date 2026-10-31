@@ -34,6 +34,7 @@ import { queryAssignments } from '../lib/assignmentSerializer';
 import {
   queryIncidentList,
   queryResourceList,
+  queryShelterAggregate,
   queryShelterList,
   queryTeamList,
   type IncidentListRow,
@@ -41,6 +42,7 @@ import {
   type ShelterRow,
 } from '../lib/domainQueries';
 import type { TeamWithRelations } from '../lib/teamSerializer';
+import type { RagToolAggregate } from './RagProvider';
 import {
   authorizeRagTool,
   type RagToolAuthorization,
@@ -53,11 +55,15 @@ import {
 
 type SerializedAssignment = Awaited<ReturnType<typeof queryAssignments>>['items'][number];
 
+export type RagToolExecutionResult<T extends RagToolName> = RagToolResult<T> & {
+  aggregate?: RagToolAggregate;
+};
+
 type RagToolHandler<T extends RagToolName> = (
   ctx: RagToolContext,
   args: RagToolArgumentMap[T],
   authorization: RagToolAuthorization,
-) => Promise<RagToolResult<T>>;
+) => Promise<RagToolExecutionResult<T>>;
 
 function iso(value: Date | null): string | null {
   return value ? value.toISOString() : null;
@@ -95,10 +101,15 @@ function nearby(args: {
 async function runTool<T extends RagToolName>(
   tool: T,
   asOf: string,
-  load: () => Promise<{ records: RagToolRecordMap[T][]; total: number; limit: number }>,
-): Promise<RagToolResult<T>> {
+  load: () => Promise<{
+    records: RagToolRecordMap[T][];
+    total: number;
+    limit: number;
+    aggregate?: RagToolAggregate;
+  }>,
+): Promise<RagToolExecutionResult<T>> {
   try {
-    const { records, total, limit } = await load();
+    const { records, total, limit, aggregate } = await load();
     const bounded = records.slice(0, limit);
     if (bounded.length === 0) {
       return {
@@ -108,6 +119,7 @@ async function runTool<T extends RagToolName>(
         records: [],
         returned_count: 0,
         truncated: false,
+        ...(aggregate ? { aggregate } : {}),
       };
     }
     return {
@@ -117,6 +129,7 @@ async function runTool<T extends RagToolName>(
       records: bounded,
       returned_count: bounded.length,
       truncated: total > limit || records.length > limit,
+      ...(aggregate ? { aggregate } : {}),
     };
   } catch {
     return {
@@ -307,7 +320,7 @@ async function getShelterCapacity(
   ctx: RagToolContext,
   args: GetShelterCapacityArgs,
   authorization: RagToolAuthorization,
-): Promise<RagToolResult<'get_shelter_capacity'>> {
+): Promise<RagToolExecutionResult<'get_shelter_capacity'>> {
   const asOf = new Date().toISOString();
 
   return runTool('get_shelter_capacity', asOf, async () => {
@@ -326,20 +339,27 @@ async function getShelterCapacity(
       query.nearby_lng = area.longitude;
       query.nearby_radius_km = area.radiusKm;
     }
-    const { items, total } = await queryShelterList({
-      scope:
-        authorization.kind === 'ACTIVE_ASSIGNMENT_TEAM'
-          ? { kind: 'ACTIVE_ASSIGNMENT_TEAM', userId: authorization.userId }
-          : { kind: 'ALL' },
-      query,
-    });
-    const records = items
+    const scope =
+      authorization.kind === 'ACTIVE_ASSIGNMENT_TEAM'
+        ? ({ kind: 'ACTIVE_ASSIGNMENT_TEAM', userId: authorization.userId } as const)
+        : ({ kind: 'ALL' } as const);
+
+    const [list, aggregate] = await Promise.all([
+      queryShelterList({ scope, query }),
+      queryShelterAggregate({ scope, query }),
+    ]);
+    const records = list.items
       .filter(
         (row): row is ShelterRow & { latitude: number; longitude: number } =>
           row.latitude !== null && row.longitude !== null,
       )
       .map(toShelterRecord);
-    return { records, total, limit: (args.limit ?? RAG_TOOL_LIMITS.DEFAULT_RESULT_LIMIT) };
+    return {
+      records,
+      total: list.total,
+      limit: (args.limit ?? RAG_TOOL_LIMITS.DEFAULT_RESULT_LIMIT),
+      aggregate: { ...aggregate, as_of: asOf },
+    };
   });
 }
 
@@ -417,7 +437,7 @@ export async function runRagTool<T extends RagToolName>(
   tool: T,
   args: RagToolArgumentMap[T],
   authorization: RagToolAuthorization,
-): Promise<RagToolResult<T>> {
+): Promise<RagToolExecutionResult<T>> {
   return ragToolHandlers[tool](ctx, args, authorization);
 }
 
@@ -425,7 +445,7 @@ export async function executeRagTool<T extends RagToolName>(
   ctx: RagToolContext,
   tool: T,
   rawArguments: unknown,
-): Promise<RagToolResult<T>> {
+): Promise<RagToolExecutionResult<T>> {
   const args = ragToolArgumentSchemas[tool].parse(rawArguments) as RagToolArgumentMap[T];
   const authorization = await authorizeRagTool(ctx, tool, args);
   return runRagTool(ctx, tool, args, authorization);
