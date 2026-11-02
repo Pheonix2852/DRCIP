@@ -27,6 +27,18 @@ function nonEmptyString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() !== '' ? value : undefined;
 }
 
+// Structured, locally-generated diagnostics only. Provider response bodies,
+// prompts, questions and credentials are never logged.
+function providerErrorCode(body: unknown): string | null {
+  if (typeof body !== 'object' || body === null) return null;
+  const error = (body as { error?: unknown }).error;
+  if (typeof error !== 'object' || error === null) return null;
+  const code = (error as { code?: unknown }).code;
+  const type = (error as { type?: unknown }).type;
+  if (typeof code === 'string') return code;
+  return typeof type === 'string' ? type : null;
+}
+
 function mapSource(source: unknown): RagCitation | null {
   if (typeof source !== 'object' || source === null) return null;
 
@@ -151,13 +163,24 @@ export class HostedRagProvider implements RagProvider {
         signal: AbortSignal.timeout(this.timeoutMs),
       });
 
-      if (!response.ok) return ragUnavailable();
+      if (!response.ok) {
+        const errorBody = await response.json().catch(() => null);
+        console.warn('[rag] provider request failed', {
+          status: response.status,
+          code: providerErrorCode(errorBody),
+        });
+        return ragUnavailable();
+      }
 
       const body = await response.json().catch(() => null);
       return mapResponse(body) ?? ragUnavailable();
-    } catch {
-      // Network, timeout and parsing failures are all degraded states. Provider
-      // response bodies and request headers must never be logged or returned.
+    } catch (err) {
+      // Network, timeout and parsing failures are all degraded states. Log only
+      // the error class name so failures remain diagnosable without leaking
+      // request or response content.
+      console.warn('[rag] provider request error', {
+        error: err instanceof Error ? err.name : 'UnknownError',
+      });
       return ragUnavailable();
     }
   }

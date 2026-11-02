@@ -206,6 +206,30 @@ class TestQueryLogic:
         assert pages.count(7) == 1
         assert 8 in pages
 
+    def test_document_answer_cites_only_used_excerpts_and_strips_markers(
+        self, api_client, mock_qdrant_client, mock_groq_client, mock_embed
+    ):
+        mock_qdrant_client.query_points.return_value = SimpleNamespace(
+            points=[
+                _make_point("Shelter X is open.", page=12),
+                _make_point("Unrelated guidance.", page=13),
+            ]
+        )
+        choice = SimpleNamespace(
+            message=SimpleNamespace(content="Shelter X is open *Excerpt 1*.")
+        )
+        mock_groq_client.chat.completions.create.return_value = SimpleNamespace(choices=[choice])
+
+        r = api_client.post(
+            "/query",
+            json={"question": "Is shelter X open?"},
+            headers=AUTH,
+        )
+        assert r.status_code == 200
+        data = r.json()
+        assert data["answer"] == "Shelter X is open."
+        assert [s["page"] for s in data["sources"]] == [12]
+
 
 class TestToolProposalAndSynthesis:
     def test_approved_proposal_is_returned_without_execution(
@@ -317,6 +341,133 @@ class TestToolProposalAndSynthesis:
         assert r.status_code == 200
         assert r.json()["answer"] == "There is 1 active incident."
 
+    def test_continuation_prompt_includes_total_for_partial_pages(
+        self, api_client, mock_qdrant_client, mock_groq_client, mock_embed
+    ):
+        mock_qdrant_client.query_points.return_value = SimpleNamespace(points=[])
+        choice = SimpleNamespace(
+            message=SimpleNamespace(content="Showing 10 of 35 active incidents.")
+        )
+        mock_groq_client.chat.completions.create.return_value = SimpleNamespace(choices=[choice])
+
+        r = api_client.post(
+            "/query",
+            json={
+                "question": "How many active incidents are there?",
+                "tool_results": [
+                    {
+                        "call_id": "call_1",
+                        "tool": "get_active_incidents",
+                        "outcome": "SUCCESS",
+                        "as_of": "2026-10-31T00:00:00.000Z",
+                        "returned_count": 10,
+                        "truncated": True,
+                        "total": 35,
+                        "records": [{"incident_id": f"inc-{i}"} for i in range(10)],
+                    }
+                ],
+            },
+            headers=AUTH,
+        )
+
+        assert r.status_code == 200
+        assert r.json()["answer"] == "Showing 10 of 35 active incidents."
+        messages = mock_groq_client.chat.completions.create.call_args.kwargs["messages"]
+        user_content = messages[1]["content"]
+        assert '"total": 35' in user_content
+        assert '"truncated": true' in user_content
+
+    def test_continuation_rejects_a_length_cut_completion(
+        self, api_client, mock_qdrant_client, mock_groq_client, mock_embed
+    ):
+        import inspect
+
+        from groq import Groq
+
+        mock_qdrant_client.query_points.return_value = SimpleNamespace(points=[])
+        choice = SimpleNamespace(
+            message=SimpleNamespace(
+                content="**Active incidents:**\n\n| # | Incident ID |"
+            ),
+            finish_reason="length",
+        )
+        mock_groq_client.chat.completions.create.return_value = SimpleNamespace(choices=[choice])
+
+        r = api_client.post(
+            "/query",
+            json={
+                "question": "List the active incidents.",
+                "tool_results": [
+                    {
+                        "call_id": "call_1",
+                        "tool": "get_active_incidents",
+                        "outcome": "SUCCESS",
+                        "as_of": "2026-10-31T00:00:00.000Z",
+                        "returned_count": 10,
+                        "truncated": True,
+                        "total": 35,
+                        "records": [{"incident_id": f"inc-{i}"} for i in range(10)],
+                    }
+                ],
+            },
+            headers=AUTH,
+        )
+
+        assert r.status_code == 200
+        answer = r.json()["answer"]
+        assert "| # | Incident ID |" not in answer
+        assert "showing 10 of 35" in answer.lower()
+
+        # The synthesis call must only use parameters supported by the pinned
+        # Groq SDK, so mock-based tests cannot mask a signature mismatch.
+        call_kwargs = mock_groq_client.chat.completions.create.call_args.kwargs
+        supported = inspect.signature(
+            Groq(api_key="test").chat.completions.create
+        ).parameters
+        assert set(call_kwargs) <= set(supported)
+        assert call_kwargs["max_tokens"] == 2048
+        assert "max_completion_tokens" not in call_kwargs
+
+    @pytest.mark.parametrize("content", ["", "INSUFFICIENT_CONTEXT"])
+    def test_continuation_success_with_unusable_synthesis_reports_counts(
+        self,
+        api_client,
+        mock_qdrant_client,
+        mock_groq_client,
+        mock_embed,
+        content,
+    ):
+        from app.services.generator import LIVE_LIMITATION
+
+        mock_qdrant_client.query_points.return_value = SimpleNamespace(points=[])
+        choice = SimpleNamespace(message=SimpleNamespace(content=content))
+        mock_groq_client.chat.completions.create.return_value = SimpleNamespace(choices=[choice])
+
+        r = api_client.post(
+            "/query",
+            json={
+                "question": "List the active incidents.",
+                "tool_results": [
+                    {
+                        "call_id": "call_1",
+                        "tool": "get_active_incidents",
+                        "outcome": "SUCCESS",
+                        "as_of": "2026-10-31T00:00:00.000Z",
+                        "returned_count": 10,
+                        "truncated": True,
+                        "total": 35,
+                        "records": [{"incident_id": f"inc-{i}"} for i in range(10)],
+                    }
+                ],
+            },
+            headers=AUTH,
+        )
+
+        assert r.status_code == 200
+        answer = r.json()["answer"]
+        assert answer != LIVE_LIMITATION
+        assert "showing 10 of 35" in answer.lower()
+
     def test_continuation_does_not_accept_invented_answer_without_live_data(
         self, api_client, mock_qdrant_client, mock_groq_client, mock_embed
     ):
@@ -348,6 +499,113 @@ class TestToolProposalAndSynthesis:
 
         assert r.status_code == 200
         assert r.json()["answer"] == LIVE_LIMITATION
+
+    def test_continuation_empty_tool_does_not_fall_back_to_document_numbers(
+        self, api_client, mock_qdrant_client, mock_groq_client, mock_embed
+    ):
+        mock_qdrant_client.query_points.return_value = SimpleNamespace(
+            points=[_make_point("There are 108 ambulances available.", page=28)]
+        )
+
+        r = api_client.post(
+            "/query",
+            json={
+                "question": "How many ambulances are available?",
+                "tool_results": [
+                    {
+                        "call_id": "call_1",
+                        "tool": "get_resource_stock",
+                        "outcome": "EMPTY",
+                        "as_of": "2026-10-31T00:00:00.000Z",
+                        "returned_count": 0,
+                        "records": [],
+                    }
+                ],
+            },
+            headers=AUTH,
+        )
+
+        assert r.status_code == 200
+        data = r.json()
+        assert data["answer"] == "No matching operational records were found."
+        assert data["sources"] == []
+        mock_groq_client.chat.completions.create.assert_not_called()
+
+    def test_continuation_live_only_answer_has_no_document_citations(
+        self, api_client, mock_qdrant_client, mock_groq_client, mock_embed
+    ):
+        mock_qdrant_client.query_points.return_value = SimpleNamespace(
+            points=[_make_point("There are 108 ambulances available.", page=28)]
+        )
+        choice = SimpleNamespace(
+            message=SimpleNamespace(
+                content="Live stock total is 11 ambulances."
+            )
+        )
+        mock_groq_client.chat.completions.create.return_value = SimpleNamespace(choices=[choice])
+
+        r = api_client.post(
+            "/query",
+            json={
+                "question": "How many ambulances are available?",
+                "tool_results": [
+                    {
+                        "call_id": "call_1",
+                        "tool": "get_resource_stock",
+                        "outcome": "SUCCESS",
+                        "as_of": "2026-10-31T00:00:00.000Z",
+                        "returned_count": 1,
+                        "records": [{"quantity": 11}],
+                    }
+                ],
+            },
+            headers=AUTH,
+        )
+
+        assert r.status_code == 200
+        data = r.json()
+        assert data["answer"] == "Live stock total is 11 ambulances."
+        assert data["sources"] == []
+
+    def test_continuation_cites_only_excerpts_used_by_the_answer(
+        self, api_client, mock_qdrant_client, mock_groq_client, mock_embed
+    ):
+        mock_qdrant_client.query_points.return_value = SimpleNamespace(
+            points=[
+                _make_point("Shelter X is open.", page=12),
+                _make_point("Unrelated guidance.", page=13),
+            ]
+        )
+        choice = SimpleNamespace(
+            message=SimpleNamespace(
+                content="Shelter X is open *Excerpt 1*. Live stock is 11."
+            )
+        )
+        mock_groq_client.chat.completions.create.return_value = SimpleNamespace(choices=[choice])
+
+        r = api_client.post(
+            "/query",
+            json={
+                "question": "Is shelter X open and how much stock is there?",
+                "tool_results": [
+                    {
+                        "call_id": "call_1",
+                        "tool": "get_resource_stock",
+                        "outcome": "SUCCESS",
+                        "as_of": "2026-10-31T00:00:00.000Z",
+                        "returned_count": 1,
+                        "records": [{"quantity": 11}],
+                    }
+                ],
+            },
+            headers=AUTH,
+        )
+
+        assert r.status_code == 200
+        data = r.json()
+        assert data["answer"] == "Shelter X is open. Live stock is 11."
+        assert len(data["sources"]) == 1
+        assert data["sources"][0]["page"] == 12
 
 
 class TestUpstreamFailures:

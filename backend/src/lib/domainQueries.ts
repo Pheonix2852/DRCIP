@@ -276,6 +276,78 @@ export async function queryResourceList(opts: {
   return { items, total: countRows[0]?.count ?? 0 };
 }
 
+export interface ResourceAggregateRow {
+  resource_count: number;
+  counted_resources: number;
+  unknown_quantity_count: number;
+  total_quantity: number;
+}
+
+export interface ResourceTypeAggregateRow {
+  resource_type: string;
+  resource_count: number;
+  counted_resources: number;
+  total_quantity: number;
+}
+
+// Resource quantity is authoritative stock. This aggregate is computed over the
+// full authorized dataset, never over the capped record page, so totals stay
+// correct when `limit` truncates the list. Negative quantities are invalid and
+// are excluded rather than treated as zero.
+export async function queryResourceAggregate(opts: {
+  scope: ResourceAccessScope;
+  query: ResourceQueryInput;
+}): Promise<{
+  resource_count: number;
+  counted_resources: number;
+  unknown_quantity_count: number;
+  total_quantity: number;
+  by_type: ResourceTypeAggregateRow[];
+}> {
+  const where = buildResourceWhere(opts.query, opts.scope);
+  const valid = Prisma.sql`r."quantity" >= 0`;
+  const invalid = Prisma.sql`r."quantity" < 0`;
+
+  const [totals, byType] = await Promise.all([
+    prisma.$queryRaw<ResourceAggregateRow[]>(Prisma.sql`
+      SELECT
+        COUNT(*)::int AS resource_count,
+        COUNT(*) FILTER (WHERE ${valid})::int AS counted_resources,
+        COUNT(*) FILTER (WHERE ${invalid})::int AS unknown_quantity_count,
+        COALESCE(SUM(r."quantity") FILTER (WHERE ${valid}), 0)::float8 AS total_quantity
+      FROM "Resource" r
+      LEFT JOIN "FieldTeam" t ON r."teamId" = t."id"
+      WHERE ${where}
+    `),
+    prisma.$queryRaw<ResourceTypeAggregateRow[]>(Prisma.sql`
+      SELECT
+        r."resourceType"::text AS resource_type,
+        COUNT(*)::int AS resource_count,
+        COUNT(*) FILTER (WHERE ${valid})::int AS counted_resources,
+        COALESCE(SUM(r."quantity") FILTER (WHERE ${valid}), 0)::float8 AS total_quantity
+      FROM "Resource" r
+      LEFT JOIN "FieldTeam" t ON r."teamId" = t."id"
+      WHERE ${where}
+      GROUP BY r."resourceType"
+      ORDER BY r."resourceType"
+    `),
+  ]);
+
+  const row = totals[0];
+  return {
+    resource_count: Number(row?.resource_count ?? 0),
+    counted_resources: Number(row?.counted_resources ?? 0),
+    unknown_quantity_count: Number(row?.unknown_quantity_count ?? 0),
+    total_quantity: Number(row?.total_quantity ?? 0),
+    by_type: byType.map((entry) => ({
+      resource_type: entry.resource_type,
+      resource_count: Number(entry.resource_count),
+      counted_resources: Number(entry.counted_resources),
+      total_quantity: Number(entry.total_quantity),
+    })),
+  };
+}
+
 export type ShelterAccessScope =
   | { kind: 'ALL' }
   | { kind: 'FIELD_OFFICER'; userId: string }

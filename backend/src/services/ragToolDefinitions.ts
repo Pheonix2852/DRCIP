@@ -103,7 +103,7 @@ export const RAG_TOOL_DEFINITIONS: readonly RagProviderToolDefinition[] = [
   {
     name: 'get_resource_stock',
     description:
-      'Operational resource stock. Use for questions about available food, medical kits, vehicles, personnel, or other resource quantities.',
+      'Operational resource stock. The result includes a complete aggregate over all authorized resources (resource_count, counted_resources, unknown_quantity_count, total_quantity, by_type) plus individual records. Use aggregate.total_quantity or aggregate.by_type for quantity totals; do not count or sum the capped records list.',
     parameters: {
       type: 'object',
       properties: {

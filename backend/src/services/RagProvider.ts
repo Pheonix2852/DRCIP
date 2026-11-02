@@ -3,6 +3,7 @@ import type {
   RagResponseStatus,
   RagToolName,
   RagToolOutcome,
+  ResourceType,
 } from '@drcip/contracts';
 
 export const RAG_VERSION = 'rag-v1';
@@ -39,9 +40,9 @@ export interface RagToolProposal {
   arguments: unknown;
 }
 
-// Complete aggregate over the authorized dataset, independent of any result
-// page. Only tools that support aggregation populate this.
-export interface RagToolAggregate {
+// Complete aggregates over the authorized dataset, independent of any result
+// page. Only tools that support aggregation populate these.
+export interface RagShelterAggregate {
   shelter_count: number;
   counted_shelters: number;
   unknown_capacity_count: number;
@@ -51,6 +52,24 @@ export interface RagToolAggregate {
   as_of: string;
 }
 
+export interface RagResourceTypeAggregate {
+  resource_type: ResourceType;
+  resource_count: number;
+  counted_resources: number;
+  total_quantity: number;
+}
+
+export interface RagResourceAggregate {
+  resource_count: number;
+  counted_resources: number;
+  unknown_quantity_count: number;
+  total_quantity: number;
+  by_type: RagResourceTypeAggregate[];
+  as_of: string;
+}
+
+export type RagToolAggregate = RagShelterAggregate | RagResourceAggregate;
+
 // Envelope sent back to Python for continuation and final synthesis.
 export interface RagProviderToolResult {
   call_id: string | null;
@@ -59,6 +78,8 @@ export interface RagProviderToolResult {
   as_of: string;
   returned_count: number;
   truncated: boolean;
+  // Total matching count before the page limit. Absent when the tool failed.
+  total?: number;
   records: unknown[];
   aggregate?: RagToolAggregate;
   message?: string;

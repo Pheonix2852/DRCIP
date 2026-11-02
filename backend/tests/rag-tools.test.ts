@@ -525,8 +525,7 @@ describe('RAG tool validation and degraded outcomes', () => {
 
     const empty = await executeRagTool(ctx, 'get_active_incidents', { limit: 10 });
     expect(empty.outcome).toBe('EMPTY');
-    expect(empty.returned_count).toBe(0);
-    expect(empty.truncated).toBe(false);
+    expect(empty).toMatchObject({ returned_count: 0, truncated: false, total: 0 });
     expectIso(empty.as_of);
 
     for (let i = 0; i < 3; i += 1) {
@@ -534,9 +533,151 @@ describe('RAG tool validation and degraded outcomes', () => {
     }
     const truncated = await executeRagTool(ctx, 'get_active_incidents', { limit: 2 });
     expect(truncated.outcome).toBe('SUCCESS');
-    expect(truncated.returned_count).toBe(2);
+    expect(truncated).toMatchObject({
+      returned_count: 2,
+      truncated: true,
+      total: 3,
+    });
     expect(truncated.records).toHaveLength(2);
-    expect(truncated.truncated).toBe(true);
+  });
+
+  it('reports the total matching count for the default and maximum limits', async () => {
+    const coordinator = await createAuthedUser('DISASTER_COORDINATOR');
+    const citizen = await createAuthedUser('CITIZEN');
+    const ctx = await resolveRagToolContext({
+      userId: coordinator.user.id,
+      userRole: 'DISASTER_COORDINATOR',
+    });
+    await Promise.all(
+      Array.from({ length: 35 }, (_, i) =>
+        createIncident(citizen.token, { description: `Bulk Incident ${i}` }),
+      ),
+    );
+
+    const defaulted = await executeRagTool(ctx, 'get_active_incidents', {});
+    expect(defaulted).toMatchObject({
+      outcome: 'SUCCESS',
+      returned_count: 10,
+      total: 35,
+      truncated: true,
+    });
+
+    const expanded = await executeRagTool(ctx, 'get_active_incidents', { limit: 50 });
+    expect(expanded).toMatchObject({
+      outcome: 'SUCCESS',
+      returned_count: 35,
+      total: 35,
+      truncated: false,
+    });
+  });
+
+  it('aggregates shelter capacity beyond the record limit without truncating totals', async () => {
+    const coordinator = await createAuthedUser('DISASTER_COORDINATOR');
+    const ctx = await resolveRagToolContext({
+      userId: coordinator.user.id,
+      userRole: 'DISASTER_COORDINATOR',
+    });
+    await Promise.all(
+      Array.from({ length: 60 }, (_, i) =>
+        createShelter({
+          name: `Aggregate Shelter ${i}`,
+          total_capacity: 100 + i,
+          current_occupancy: i,
+        }),
+      ),
+    );
+
+    const result = await executeRagTool(ctx, 'get_shelter_capacity', { limit: 10 });
+    expect(result.outcome).toBe('SUCCESS');
+    expect(result.records).toHaveLength(10);
+    expect(result.returned_count).toBe(10);
+    expect(result.truncated).toBe(true);
+    expect(result.aggregate).toMatchObject({
+      shelter_count: 60,
+      counted_shelters: 60,
+      unknown_capacity_count: 0,
+      total_capacity: 7770,
+      current_occupancy: 1770,
+      available_capacity: 6000,
+    });
+    expectIso(result.aggregate!.as_of);
+  });
+
+  it('aggregates resource stock quantities beyond the record limit', async () => {
+    const coordinator = await createAuthedUser('DISASTER_COORDINATOR');
+    const ctx = await resolveRagToolContext({
+      userId: coordinator.user.id,
+      userRole: 'DISASTER_COORDINATOR',
+    });
+    await createResource({ resource_type: 'AMBULANCE', quantity: 5 });
+    await createResource({ resource_type: 'AMBULANCE', quantity: 5 });
+    await createResource({ resource_type: 'AMBULANCE', quantity: 1 });
+    await createResource({ resource_type: 'MEDICAL_KIT', quantity: 2 });
+    await createResource({ resource_type: 'MEDICAL_KIT', quantity: 1 });
+    await createResource({ resource_type: 'MEDICAL_KIT', quantity: 1 });
+    await createResource({ resource_type: 'RELIEF_TRUCK', quantity: 1 });
+    await createResource({ resource_type: 'RELIEF_TRUCK', quantity: 1 });
+
+    const result = await executeRagTool(ctx, 'get_resource_stock', { limit: 2 });
+    expect(result.outcome).toBe('SUCCESS');
+    expect(result.records).toHaveLength(2);
+    expect(result.returned_count).toBe(2);
+    expect(result.truncated).toBe(true);
+    expect(result.aggregate).toMatchObject({
+      resource_count: 8,
+      counted_resources: 8,
+      unknown_quantity_count: 0,
+      total_quantity: 17,
+      by_type: [
+        { resource_type: 'AMBULANCE', resource_count: 3, counted_resources: 3, total_quantity: 11 },
+        { resource_type: 'MEDICAL_KIT', resource_count: 3, counted_resources: 3, total_quantity: 4 },
+        { resource_type: 'RELIEF_TRUCK', resource_count: 2, counted_resources: 2, total_quantity: 2 },
+      ],
+    });
+    expectIso(result.aggregate!.as_of);
+  });
+
+  it('excludes invalid resource quantities from aggregates instead of treating them as zero', async () => {
+    const coordinator = await createAuthedUser('DISASTER_COORDINATOR');
+    const ctx = await resolveRagToolContext({
+      userId: coordinator.user.id,
+      userRole: 'DISASTER_COORDINATOR',
+    });
+    await createResource({ resource_type: 'AMBULANCE', quantity: 100 });
+    await createResource({ resource_type: 'AMBULANCE', quantity: -1 });
+
+    const result = await executeRagTool(ctx, 'get_resource_stock', { limit: 10 });
+    expect(result.aggregate).toMatchObject({
+      resource_count: 2,
+      counted_resources: 1,
+      unknown_quantity_count: 1,
+      total_quantity: 100,
+      by_type: [
+        { resource_type: 'AMBULANCE', resource_count: 2, counted_resources: 1, total_quantity: 100 },
+      ],
+    });
+  });
+
+  it('excludes invalid shelter capacities from aggregates instead of treating them as zero', async () => {
+    const coordinator = await createAuthedUser('DISASTER_COORDINATOR');
+    const ctx = await resolveRagToolContext({
+      userId: coordinator.user.id,
+      userRole: 'DISASTER_COORDINATOR',
+    });
+    await createShelter({ name: 'Valid', total_capacity: 100, current_occupancy: 40 });
+    await createShelter({ name: 'Negative capacity', total_capacity: -1, current_occupancy: 0 });
+    await createShelter({ name: 'Negative occupancy', total_capacity: 50, current_occupancy: -5 });
+
+    const result = await executeRagTool(ctx, 'get_shelter_capacity', { limit: 10 });
+    expect(result.outcome).toBe('SUCCESS');
+    expect(result.aggregate).toMatchObject({
+      shelter_count: 3,
+      counted_shelters: 1,
+      unknown_capacity_count: 2,
+      total_capacity: 100,
+      current_occupancy: 40,
+      available_capacity: 60,
+    });
   });
 
   it('returns UNAVAILABLE when the domain query fails and stays read-only', async () => {

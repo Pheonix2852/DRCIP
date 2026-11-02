@@ -33,6 +33,7 @@ import {
 import { queryAssignments } from '../lib/assignmentSerializer';
 import {
   queryIncidentList,
+  queryResourceAggregate,
   queryResourceList,
   queryShelterAggregate,
   queryShelterList,
@@ -119,6 +120,7 @@ async function runTool<T extends RagToolName>(
         records: [],
         returned_count: 0,
         truncated: false,
+        total: 0,
         ...(aggregate ? { aggregate } : {}),
       };
     }
@@ -129,6 +131,7 @@ async function runTool<T extends RagToolName>(
       records: bounded,
       returned_count: bounded.length,
       truncated: total > limit || records.length > limit,
+      total,
       ...(aggregate ? { aggregate } : {}),
     };
   } catch {
@@ -367,7 +370,7 @@ async function getResourceStock(
   ctx: RagToolContext,
   args: GetResourceStockArgs,
   _authorization: RagToolAuthorization,
-): Promise<RagToolResult<'get_resource_stock'>> {
+): Promise<RagToolExecutionResult<'get_resource_stock'>> {
   const asOf = new Date().toISOString();
 
   return runTool('get_resource_stock', asOf, async () => {
@@ -384,12 +387,28 @@ async function getResourceStock(
       query.nearby_lng = area.longitude;
       query.nearby_radius_km = area.radiusKm;
     }
-    const { items, total } = await queryResourceList({
-      scope: { kind: 'ALL' },
-      query,
-      requesterId: ctx.userId,
-    });
-    return { records: items.map(toResourceRecord), total, limit: (args.limit ?? RAG_TOOL_LIMITS.DEFAULT_RESULT_LIMIT) };
+    const scope = { kind: 'ALL' } as const;
+    const [list, aggregate] = await Promise.all([
+      queryResourceList({
+        scope,
+        query,
+        requesterId: ctx.userId,
+      }),
+      queryResourceAggregate({ scope, query }),
+    ]);
+    return {
+      records: list.items.map(toResourceRecord),
+      total: list.total,
+      limit: (args.limit ?? RAG_TOOL_LIMITS.DEFAULT_RESULT_LIMIT),
+      aggregate: {
+        ...aggregate,
+        by_type: aggregate.by_type.map((entry) => ({
+          ...entry,
+          resource_type: entry.resource_type as ResourceType,
+        })),
+        as_of: asOf,
+      },
+    };
   });
 }
 

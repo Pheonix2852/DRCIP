@@ -16,6 +16,7 @@ Abstention:     Triggered by score threshold (pre-LLM) or LLM sentinel.
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Security
@@ -92,6 +93,7 @@ class ToolResult(BaseModel):
     as_of: str = Field(..., min_length=1, max_length=64)
     returned_count: int = Field(default=0, ge=0)
     truncated: bool = False
+    total: int | None = Field(default=None, ge=0)
     records: list[dict[str, Any]] = Field(default_factory=list)
     aggregate: dict[str, Any] | None = None
     message: str | None = Field(default=None, max_length=500)
@@ -117,11 +119,25 @@ class QueryResponse(BaseModel):
     tool_calls: list[ToolCallProposal] = Field(default_factory=list)
 
 
-def _build_sources(chunks) -> list[SourceCitation]:
-    """Deduplicate chunk payloads into page-level citations."""
+_EXCERPT_MARKER = re.compile(
+    r"\s*(?:[\[(]\s*)?(?:\*{1,3}|_{1,3})?\s*Excerpt\s+(\d+)\s*(?:\*{1,3}|_{1,3})?\s*(?:[\])])?",
+    re.IGNORECASE,
+)
+
+
+def _build_sources(
+    chunks, indices: set[int] | None = None
+) -> list[SourceCitation]:
+    """Deduplicate chunk payloads into page-level citations.
+
+    ``indices`` are 1-based excerpt numbers the answer actually used. When it is
+    supplied, only those excerpts become citations.
+    """
     sources: list[SourceCitation] = []
     seen_pages: set[tuple[str, int]] = set()
-    for chunk in chunks:
+    for index, chunk in enumerate(chunks, start=1):
+        if indices is not None and index not in indices:
+            continue
         p = chunk.payload or {}
         doc = p.get("source", "unknown")
         page = p.get("page", 0)
@@ -137,6 +153,15 @@ def _build_sources(chunks) -> list[SourceCitation]:
                 )
             )
     return sources
+
+
+def _finalize_document_answer(answer: str, chunks) -> tuple[str, list[SourceCitation]]:
+    """Strip used-excerpt markers and cite only the excerpts they reference."""
+    used = {int(match.group(1)) for match in _EXCERPT_MARKER.finditer(answer)}
+    if not used:
+        return answer, _build_sources(chunks)
+    cleaned = _EXCERPT_MARKER.sub("", answer).strip()
+    return cleaned, _build_sources(chunks, used)
 
 
 # ── Auth dependency ───────────────────────────────────────────────────────────
@@ -200,24 +225,65 @@ def query_endpoint(
 
     # 3. Continuation: synthesize from documents and Node-executed tool results.
     if tool_results:
+        results = [result.model_dump() for result in tool_results]
+        outcomes = {result.outcome for result in tool_results}
+
+        # A tool call means the question was operational. When every call is
+        # EMPTY, document numbers must not be presented as current availability.
+        if "SUCCESS" not in outcomes:
+            if "EMPTY" in outcomes:
+                answer = "No matching operational records were found."
+                if outcomes & {"UNAVAILABLE", "ERROR"}:
+                    answer += " Some live operational data could not be retrieved."
+            else:
+                answer = generator.LIVE_LIMITATION
+            return QueryResponse(
+                answer=answer,
+                sources=[],
+                model=settings.groq_model,
+                chunks_retrieved=len(chunks),
+            )
+
         try:
             answer = generator.synthesize(
                 client=groq_client,
                 model=settings.groq_model,
                 question=body.question,
                 chunks=chunks,
-                tool_results=[result.model_dump() for result in tool_results],
+                tool_results=results,
+            )
+        except generator.GenerationTruncatedError:
+            # Never return a partial answer as complete. Fall back to the
+            # counts already present in the tool results.
+            answer = (
+                "Live operational data was retrieved, but the generated summary "
+                "was truncated at the response length limit.\n\n"
+                + generator.deterministic_summary(results)
+            )
+            return QueryResponse(
+                answer=answer,
+                sources=[],
+                model=settings.groq_model,
+                chunks_retrieved=len(chunks),
             )
         except Exception as exc:
             raise _unavailable("Generation service", exc) from exc
 
-        # Never present an invented answer when there is no usable source.
+        # Never present an invented answer, or the no-data limitation, when
+        # live data was retrieved successfully.
         if not answer or generator.is_insufficient(answer):
-            answer = generator.LIVE_LIMITATION
-        elif not chunks and not generator.has_usable_live_data(
-            [result.model_dump() for result in tool_results]
-        ):
-            answer = generator.LIVE_LIMITATION
+            answer = (
+                "Live operational data was retrieved, but a generated summary "
+                "was unavailable.\n\n"
+                + generator.deterministic_summary(results)
+            )
+            sources = []
+        else:
+            # Cite only document excerpts the answer explicitly used. This keeps
+            # live-only answers free of unrelated document citations.
+            used = {int(match.group(1)) for match in _EXCERPT_MARKER.finditer(answer)}
+            answer = _EXCERPT_MARKER.sub("", answer).strip()
+            sources = _build_sources(chunks, used) if used else []
 
         return QueryResponse(
             answer=answer,
@@ -259,8 +325,9 @@ def query_endpoint(
                 chunks_retrieved=len(chunks),
             )
 
+        answer, sources = _finalize_document_answer(content, chunks)
         return QueryResponse(
-            answer=content,
+            answer=answer,
             sources=sources,
             model=settings.groq_model,
             chunks_retrieved=len(chunks),
@@ -293,6 +360,7 @@ def query_endpoint(
             chunks_retrieved=len(chunks),
         )
 
+    answer, sources = _finalize_document_answer(answer, chunks)
     return QueryResponse(
         answer=answer,
         sources=sources,

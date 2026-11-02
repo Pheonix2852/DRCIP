@@ -206,7 +206,10 @@ async function executeInvocation(
     };
   }
 
-  const parsedInvocation = ragToolInvocationSchema.safeParse(invocation);
+  const parsedInvocation = ragToolInvocationSchema.safeParse({
+    tool: invocation.tool,
+    arguments: invocation.arguments,
+  });
   if (!parsedInvocation.success) {
     const call: RagToolCall = {
       tool: parsedTool.data,
@@ -292,6 +295,9 @@ async function executeInvocation(
       as_of: result.as_of,
       returned_count: result.returned_count,
       truncated: result.truncated,
+      ...(result.outcome === 'SUCCESS' || result.outcome === 'EMPTY'
+        ? { total: result.total }
+        : {}),
       records: result.records,
       ...(result.aggregate ? { aggregate: result.aggregate } : {}),
       ...('message' in result ? { message: result.message } : {}),
@@ -357,7 +363,11 @@ export class RagService {
 
     try {
       result = await this.provider.query(question, {
-        tools: [...RAG_TOOL_DEFINITIONS],
+        // Citizens receive document-grounded answers only. Withholding tool
+        // definitions keeps the provider on the RAG 1.0 document path instead
+        // of proposing calls the RBAC layer would deny.
+        tools:
+          context?.userRole === 'CITIZEN' ? [] : [...RAG_TOOL_DEFINITIONS],
       });
     } catch {
       // A provider must not be able to fail the public contract or leak details.
@@ -432,7 +442,11 @@ export class RagService {
         // Tool execution is single-round by contract. A continuation response
         // must never trigger another execution loop.
         recursiveToolCallsIgnored = continuation.tool_invocations?.length ?? 0;
-      } catch {
+      } catch (err) {
+        console.warn('[rag] continuation failed', {
+          request_id: context.requestId ?? null,
+          error: err instanceof Error ? err.name : 'UnknownError',
+        });
         continuation = undefined;
       }
     }
@@ -449,10 +463,9 @@ export class RagService {
         : hasLiveEvidence && base.answer.trim().length === 0
           ? 'Live operational data was retrieved, but a summary could not be generated. Review the live evidence below.'
           : base.answer;
-    const citations =
-      usableContinuation && usableContinuation.citations.length > 0
-        ? usableContinuation.citations
-        : base.citations;
+    const citations = usableContinuation
+      ? usableContinuation.citations
+      : base.citations;
     const status: RagQueryResponse['status'] = hasLiveEvidence
       ? 'GROUNDED'
       : usableContinuation?.status === 'GROUNDED' || base.status === 'GROUNDED'

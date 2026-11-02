@@ -13,6 +13,7 @@ import type { RagProviderResult } from '../src/services/RagProvider';
 import { ragToolHandlers } from '../src/services/ragTools';
 import {
   createAuthedUser,
+  createIncident,
   createShelter,
   createTeam,
   truncateTables,
@@ -120,6 +121,42 @@ describe('RAG live-tool orchestration', () => {
     expect(serialized).not.toContain('Open Shelter');
   });
 
+  it('accepts a provider proposal that carries a provider call id', async () => {
+    const coordinator = await createAuthedUser('DISASTER_COORDINATOR');
+    await createShelter({ name: 'Provider Id Shelter' });
+    const service = new RagService(
+      providerWith([
+        {
+          id: 'fc_provider_call_1',
+          tool: 'get_shelter_capacity',
+          arguments: { limit: 10 },
+        },
+      ]),
+    );
+
+    const result = await service.query('Shelters?', {
+      userId: coordinator.user.id,
+      userRole: 'DISASTER_COORDINATOR',
+      requestId: 'req-rag-provider-id',
+    });
+
+    expect(result.tool_calls).toEqual([
+      expect.objectContaining({
+        tool: 'get_shelter_capacity',
+        outcome: 'SUCCESS',
+      }),
+    ]);
+    expect(result.live_evidence).toHaveLength(1);
+
+    const audit = await prisma.auditLog.findFirst({
+      where: { action: 'RAG_TOOL_CALL' },
+    });
+    expect(audit?.metadata).toMatchObject({
+      authorization: 'ALLOWED',
+      outcome: 'SUCCESS',
+    });
+  });
+
   it('keeps document citations separate from live evidence', async () => {
     const coordinator = await createAuthedUser('DISASTER_COORDINATOR');
     await createShelter({ name: 'Mixed Evidence Shelter' });
@@ -152,6 +189,36 @@ describe('RAG live-tool orchestration', () => {
     expect(JSON.stringify(result.citations)).not.toContain(
       'LIVE_OPERATIONAL_DATA',
     );
+  });
+
+  it('does not restore initial document citations when continuation omits them', async () => {
+    const coordinator = await createAuthedUser('DISASTER_COORDINATOR');
+    await createShelter({ name: 'Live Only Shelter' });
+    const service = new RagService({
+      query: vi.fn().mockResolvedValue({
+        status: 'GROUNDED',
+        answer: 'Document answer.',
+        citations: [{ title: 'Flood Response Guide', page: 3 }],
+        tool_invocations: [
+          { tool: 'get_shelter_capacity', arguments: { limit: 1 } },
+        ],
+      }),
+      continue: vi.fn().mockResolvedValue({
+        status: 'GROUNDED',
+        answer: '11 ambulances are available.',
+        citations: [],
+      }),
+    });
+
+    const result = await service.query('How many ambulances?', {
+      userId: coordinator.user.id,
+      userRole: 'DISASTER_COORDINATOR',
+      requestId: 'req-rag-live-only',
+    });
+
+    expect(result.answer).toBe('11 ambulances are available.');
+    expect(result.citations).toEqual([]);
+    expect(result.live_evidence).toHaveLength(1);
   });
 
   it('denies every live tool to a citizen without returning evidence', async () => {
@@ -533,6 +600,28 @@ describe('RAG tool continuation', () => {
     ]);
   });
 
+  it('withholds live tool definitions from citizens', async () => {
+    const citizen = await createAuthedUser('CITIZEN');
+    const provider = {
+      query: vi.fn().mockResolvedValue({
+        status: 'GROUNDED',
+        answer: 'Document answer.',
+        citations: [{ title: 'Flood Guide', page: 3 }],
+      }),
+    };
+    const service = new RagService(provider);
+
+    const result = await service.query('What is the flood guidance?', {
+      userId: citizen.user.id,
+      userRole: 'CITIZEN',
+    });
+
+    expect(provider.query.mock.calls[0][1].tools).toEqual([]);
+    expect(result.rag_version).toBe('rag-v1');
+    expect(result.citations).toEqual([{ title: 'Flood Guide', page: 3 }]);
+  });
+
+
   it('continues with tool-result envelopes and uses the synthesized answer', async () => {
     const coordinator = await createAuthedUser('DISASTER_COORDINATOR');
     await createShelter({
@@ -568,6 +657,7 @@ describe('RAG tool continuation', () => {
       outcome: 'SUCCESS',
       returned_count: 1,
       truncated: false,
+      total: 1,
     });
     expect(toolResults[0].aggregate).toMatchObject({
       shelter_count: 1,
@@ -578,6 +668,44 @@ describe('RAG tool continuation', () => {
       available_capacity: 80,
     });
     expect(toolResults[0].aggregate.as_of).toEqual(toolResults[0].as_of);
+  });
+
+  it('forwards the total matching count to the continuation', async () => {
+    const coordinator = await createAuthedUser('DISASTER_COORDINATOR');
+    const citizen = await createAuthedUser('CITIZEN');
+    await Promise.all(
+      Array.from({ length: 35 }, (_, i) =>
+        createIncident(citizen.token, {
+          description: `Continuation Incident ${i}`,
+        }),
+      ),
+    );
+    const provider = providerWithContinuation(
+      [{ tool: 'get_active_incidents', arguments: { limit: 10 } }],
+      {
+        status: 'ABSTAINED',
+        answer: 'Showing 10 of 35 active incidents.',
+        citations: [],
+      },
+    );
+    const service = new RagService(provider);
+
+    const result = await service.query('List active incidents.', {
+      userId: coordinator.user.id,
+      userRole: 'DISASTER_COORDINATOR',
+      requestId: 'req-rag-total',
+    });
+
+    expect(result.status).toBe('GROUNDED');
+    const [, toolResults] = provider.continue.mock.calls[0];
+    expect(toolResults[0]).toMatchObject({
+      tool: 'get_active_incidents',
+      outcome: 'SUCCESS',
+      returned_count: 10,
+      truncated: true,
+      total: 35,
+    });
+    expect(toolResults[0].records).toHaveLength(10);
   });
 
   it('aggregates every authorized shelter even when the record list is capped', async () => {
@@ -601,6 +729,7 @@ describe('RAG tool continuation', () => {
     expect(toolResults[0]).toMatchObject({
       returned_count: 1,
       truncated: true,
+      total: 3,
     });
     expect(toolResults[0].aggregate).toMatchObject({
       shelter_count: 3,

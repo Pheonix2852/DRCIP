@@ -438,6 +438,7 @@ export interface RagToolSuccessResult<T extends RagToolName> extends RagToolResu
   records: RagToolRecordMap[T][];
   returned_count: number;
   truncated: boolean;
+  total: number;
 }
 
 export interface RagToolEmptyResult<T extends RagToolName> extends RagToolResultBase<T> {
@@ -445,6 +446,7 @@ export interface RagToolEmptyResult<T extends RagToolName> extends RagToolResult
   records: [];
   returned_count: 0;
   truncated: false;
+  total: 0;
 }
 
 export interface RagToolFailureResult<T extends RagToolName> extends RagToolResultBase<T> {
