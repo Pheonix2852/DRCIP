@@ -38,6 +38,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
   vi.restoreAllMocks();
 });
 
@@ -113,6 +114,7 @@ describe('HostedRagProvider request', () => {
   });
 
   it('returns UNAVAILABLE without calling the provider when no API key is configured', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const result = await new HostedRagProvider({
       baseUrl: BASE_URL,
       apiKey: '',
@@ -123,6 +125,31 @@ describe('HostedRagProvider request', () => {
     expect(result.status).toBe('UNAVAILABLE');
     expect(result.answer).toBe(RAG_UNAVAILABLE_ANSWER);
     expect(result.citations).toEqual([]);
+    expect(warn).toHaveBeenCalledWith('[rag] provider API key is not configured');
+  });
+});
+
+describe('HostedRagProvider configuration', () => {
+  it('treats RAG_SERVICE_URL as an origin and appends /query once', async () => {
+    vi.stubEnv('RAG_SERVICE_URL', 'https://drcip-rag.onrender.com/');
+    vi.stubEnv('RAG_API_KEY', API_KEY);
+    fetchMock.mockResolvedValue(response(providerPayload()));
+
+    await new HostedRagProvider().query('What now?');
+
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('https://drcip-rag.onrender.com/query');
+  });
+
+  it('falls back to the deployed RAG service when RAG_SERVICE_URL is unset', async () => {
+    vi.stubEnv('RAG_SERVICE_URL', '');
+    vi.stubEnv('RAG_API_KEY', API_KEY);
+    fetchMock.mockResolvedValue(response(providerPayload()));
+
+    await new HostedRagProvider().query('What now?');
+
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('https://drcip-rag.onrender.com/query');
   });
 });
 
@@ -273,7 +300,7 @@ describe('HostedRagProvider degraded states', () => {
     expect(result.status).toBe('UNAVAILABLE');
   });
 
-  it.each([401, 422, 429, 500, 503])(
+  it.each([401, 404, 422, 429, 500, 503])(
     'maps provider HTTP %i to UNAVAILABLE without returning the body',
     async (status) => {
       fetchMock.mockResolvedValue(response({ detail: 'provider detail' }, status));
@@ -318,7 +345,11 @@ describe('HostedRagProvider degraded states', () => {
     expect(JSON.stringify(result)).not.toContain(API_KEY);
     expect(log).not.toHaveBeenCalled();
     expect(error).not.toHaveBeenCalled();
-    expect(warn).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith('[rag] provider request failed', {
+      status: 401,
+      code: null,
+    });
     expect(info).not.toHaveBeenCalled();
     expect(debug).not.toHaveBeenCalled();
   });

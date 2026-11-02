@@ -150,7 +150,10 @@ export class HostedRagProvider implements RagProvider {
   }
 
   private async post(payload: Record<string, unknown>): Promise<RagProviderResult> {
-    if (!this.apiKey) return ragUnavailable();
+    if (!this.apiKey) {
+      console.warn('[rag] provider API key is not configured');
+      return ragUnavailable();
+    }
 
     try {
       const response = await fetch(`${this.baseUrl}/query`, {

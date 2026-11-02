@@ -8,7 +8,7 @@ import type {
 
 export const RAG_VERSION = 'rag-v1';
 export const RAG_VERSION_V2 = 'rag-v2';
-export const DEFAULT_RAG_SERVICE_URL = 'https://rag-drcip.onrender.com';
+export const DEFAULT_RAG_SERVICE_URL = 'https://drcip-rag.onrender.com';
 
 // Render free web services can cold-start after idle spin-down. The provider
 // call is user-initiated and must tolerate that without failing immediately.
