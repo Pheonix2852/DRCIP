@@ -22,8 +22,16 @@ def _never_load_embedding_model(monkeypatch):
     """
     Keep the suite offline and fast.
 
-    ``app.main.lifespan`` calls ``preload()``, which would otherwise load
-    all-MiniLM-L6-v2 (~80 MB download on a cold cache). Query-time ``embed()``
-    is mocked in the tests themselves.
+    The app loads the embedding model lazily on the first ``embed()`` call.
+    This guard makes any accidental model construction fail loudly instead of
+    downloading all-MiniLM-L6-v2 (~80 MB on a cold cache).
     """
-    monkeypatch.setattr("app.services.embedder._load_model", lambda: None)
+    def _blocked(*args, **kwargs):
+        raise AssertionError("embedding model must not be loaded in tests")
+
+    # Patch the constructor, not the cached wrapper, so is_model_loaded() and
+    # the lru_cache semantics remain testable without importing torch.
+    monkeypatch.setattr(
+        "app.services.embedder._create_model",
+        _blocked,
+    )

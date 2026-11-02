@@ -2,8 +2,8 @@
 FastAPI application entry point.
 
 Startup sequence (lifespan):
-  1. Pre-load embedding model into RAM once (avoids slow first request).
-  2. Initialise Qdrant and Groq clients (cached via lru_cache).
+  1. Initialise Qdrant and Groq clients (cached via lru_cache).
+  2. The embedding model is loaded lazily on the first embedding request.
 
 Routes:
   GET  /          — API info
@@ -22,7 +22,7 @@ from qdrant_client import QdrantClient
 
 from app.dependencies import get_groq_client, get_qdrant_client, get_settings
 from app.routers import query
-from app.services.embedder import preload
+from app.services.embedder import is_model_loaded
 
 logging.basicConfig(
     level=logging.INFO,
@@ -36,10 +36,6 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):  # noqa: ARG001
     logger.info("── Startup ──────────────────────────────────────────")
-
-    logger.info("Loading embedding model (all-MiniLM-L6-v2)…")
-    preload()
-    logger.info("Embedding model ready.")
 
     logger.info("Initialising Qdrant client…")
     get_qdrant_client()
@@ -115,5 +111,5 @@ def health(qdrant: QdrantClient = Depends(get_qdrant_client)):
         "qdrant": qdrant_status,
         "collection": settings.qdrant_collection,
         "model": "all-MiniLM-L6-v2",
-        "model_loaded": True,
+        "model_loaded": is_model_loaded(),
     }
