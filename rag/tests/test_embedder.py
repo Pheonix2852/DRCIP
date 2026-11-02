@@ -1,6 +1,8 @@
 """Lazy embedding-model loading and health-reporting tests (offline)."""
 from __future__ import annotations
 
+import time
+from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import MagicMock
 
 import pytest
@@ -74,6 +76,23 @@ def test_subsequent_embeds_reuse_the_cached_model(monkeypatch):
     embedder.embed("two")
 
     assert created == [embedder.MODEL_NAME]
+
+
+def test_concurrent_first_embeds_load_model_once(monkeypatch):
+    created: list[str] = []
+
+    def factory() -> _FakeModel:
+        created.append(embedder.MODEL_NAME)
+        time.sleep(0.05)
+        return _FakeModel(embedder.MODEL_NAME)
+
+    monkeypatch.setattr("app.services.embedder._create_model", factory)
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        vectors = list(pool.map(lambda _: embedder.embed("flood"), range(8)))
+
+    assert created == [embedder.MODEL_NAME]
+    assert all(vector == [0.0] * embedder.EMBEDDING_DIM for vector in vectors)
 
 
 def test_health_reports_model_state_without_loading_it(monkeypatch, offline_client):

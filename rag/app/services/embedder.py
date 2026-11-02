@@ -10,6 +10,7 @@ CPU-only PyTorch is installed in the Dockerfile to avoid the ~2 GB GPU variant.
 """
 from __future__ import annotations
 
+import threading
 from functools import lru_cache
 from typing import TYPE_CHECKING
 
@@ -33,6 +34,19 @@ def _load_model() -> "SentenceTransformer":
     return _create_model()
 
 
+# lru_cache does not serialise concurrent misses, so two first requests would
+# otherwise construct two models and risk the 512 MB instance limit.
+_model_lock = threading.Lock()
+
+
+def _get_model() -> "SentenceTransformer":
+    """Return the cached model, serialising the first load."""
+    if _load_model.cache_info().currsize:
+        return _load_model()
+    with _model_lock:
+        return _load_model()
+
+
 def is_model_loaded() -> bool:
     """Report whether the cached model is resident without loading it."""
     return _load_model.cache_info().currsize > 0
@@ -45,6 +59,6 @@ def embed(text: str) -> list[float]:
     Normalisation (L2) ensures cosine similarity equals dot product,
     which is what Qdrant uses for COSINE distance collections.
     """
-    model = _load_model()
+    model = _get_model()
     vector = model.encode(text, normalize_embeddings=True, show_progress_bar=False)
     return vector.tolist()
