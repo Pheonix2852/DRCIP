@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     api_keys: str  # comma-separated bearer tokens
 
     # ── Optional with sensible defaults ───────────────────────────────────────
-    qdrant_collection: str = "disaster_docs"
+    qdrant_collection: str = "disaster_docs_bge"
     groq_model: str = "openai/gpt-oss-20b"
     top_k: int = 5
     score_threshold: float = 0.30  # cosine similarity floor for abstention

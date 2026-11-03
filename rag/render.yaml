@@ -17,8 +17,20 @@ services:
         sync: false
       - key: API_KEYS
         sync: false
+      - key: CLOUDFLARE_ACCOUNT_ID
+        sync: false
+      - key: CLOUDFLARE_API_TOKEN
+        sync: false
+      - key: CLOUDFLARE_EMBEDDING_MODEL
+        value: "@cf/baai/bge-small-en-v1.5"
+      - key: CLOUDFLARE_EMBEDDING_TIMEOUT_SECONDS
+        value: "30"
+      - key: CLOUDFLARE_EMBEDDING_BATCH_SIZE
+        value: "16"
+      - key: CLOUDFLARE_EMBEDDING_POOLING
+        value: cls
       - key: QDRANT_COLLECTION
-        value: disaster_docs
+        value: disaster_docs_bge_v2
       - key: GROQ_MODEL
         value: openai/gpt-oss-20b
       - key: TOP_K

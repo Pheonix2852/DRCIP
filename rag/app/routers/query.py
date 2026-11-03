@@ -221,6 +221,8 @@ def query_endpoint(
     except Exception as exc:
         raise _unavailable("Vector store", exc) from exc
 
+    retrieved_count = len(chunks)
+    chunks = retriever.dedupe_overlapping_chunks(chunks)
     sources = _build_sources(chunks)
 
     # 3. Continuation: synthesize from documents and Node-executed tool results.
@@ -241,7 +243,7 @@ def query_endpoint(
                 answer=answer,
                 sources=[],
                 model=settings.groq_model,
-                chunks_retrieved=len(chunks),
+                chunks_retrieved=retrieved_count,
             )
 
         try:
@@ -264,7 +266,7 @@ def query_endpoint(
                 answer=answer,
                 sources=[],
                 model=settings.groq_model,
-                chunks_retrieved=len(chunks),
+                chunks_retrieved=retrieved_count,
             )
         except Exception as exc:
             raise _unavailable("Generation service", exc) from exc
@@ -289,7 +291,7 @@ def query_endpoint(
             answer=answer,
             sources=sources,
             model=settings.groq_model,
-            chunks_retrieved=len(chunks),
+            chunks_retrieved=retrieved_count,
         )
 
     # 4. Tool-proposal path: missing document chunks must not block a valid
@@ -311,7 +313,7 @@ def query_endpoint(
                 answer=content,
                 sources=sources,
                 model=settings.groq_model,
-                chunks_retrieved=len(chunks),
+                chunks_retrieved=retrieved_count,
                 tool_calls=[ToolCallProposal(**proposal) for proposal in proposals],
             )
 
@@ -322,7 +324,7 @@ def query_endpoint(
                 answer=_ABSTENTION,
                 sources=[],
                 model=settings.groq_model,
-                chunks_retrieved=len(chunks),
+                chunks_retrieved=retrieved_count,
             )
 
         answer, sources = _finalize_document_answer(content, chunks)
@@ -330,7 +332,7 @@ def query_endpoint(
             answer=answer,
             sources=sources,
             model=settings.groq_model,
-            chunks_retrieved=len(chunks),
+            chunks_retrieved=retrieved_count,
         )
 
     # 5. Document-only path (RAG 1.0, unchanged).
@@ -349,6 +351,13 @@ def query_endpoint(
             question=body.question,
             chunks=chunks,
         )
+    except generator.GenerationTruncatedError:
+        return QueryResponse(
+            answer=generator.TRUNCATED_ANSWER,
+            sources=[],
+            model=settings.groq_model,
+            chunks_retrieved=retrieved_count,
+        )
     except Exception as exc:
         raise _unavailable("Generation service", exc) from exc
 
@@ -357,7 +366,7 @@ def query_endpoint(
             answer=_ABSTENTION,
             sources=[],
             model=settings.groq_model,
-            chunks_retrieved=len(chunks),
+            chunks_retrieved=retrieved_count,
         )
 
     answer, sources = _finalize_document_answer(answer, chunks)
@@ -365,5 +374,5 @@ def query_endpoint(
         answer=answer,
         sources=sources,
         model=settings.groq_model,
-        chunks_retrieved=len(chunks),
+        chunks_retrieved=retrieved_count,
     )

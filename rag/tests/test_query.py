@@ -29,10 +29,21 @@ AUTH = {"Authorization": f"Bearer {VALID_KEY}"}
 
 # ── Helpers to build mock Qdrant ScoredPoints ────────────────────────────────
 
-def _make_point(text: str, source: str = "disaster.pdf", page: int = 5, score: float = 0.8):
+def _make_point(
+    text: str,
+    source: str = "disaster.pdf",
+    page: int = 5,
+    score: float = 0.8,
+    chunk_index: int = 0,
+):
     p = SimpleNamespace()
     p.score = score
-    p.payload = {"text": text, "source": source, "page": page, "chunk_index": 0}
+    p.payload = {
+        "text": text,
+        "source": source,
+        "page": page,
+        "chunk_index": chunk_index,
+    }
     return p
 
 
@@ -230,6 +241,96 @@ class TestQueryLogic:
         data = r.json()
         assert data["answer"] == "Shelter X is open."
         assert [s["page"] for s in data["sources"]] == [12]
+
+
+    def test_truncated_document_answer_is_not_returned_as_complete(
+        self, api_client, mock_qdrant_client, mock_groq_client, mock_embed
+    ):
+        from app.services import generator
+
+        mock_qdrant_client.query_points.return_value = SimpleNamespace(
+            points=[_make_point("Grounded but long context.", page=12)]
+        )
+        truncated = SimpleNamespace(
+            message=SimpleNamespace(content="This answer was cut off"),
+            finish_reason="length",
+        )
+        mock_groq_client.chat.completions.create.return_value = SimpleNamespace(
+            choices=[truncated]
+        )
+
+        r = api_client.post(
+            "/query",
+            json={"question": "What are the evacuation procedures?"},
+            headers=AUTH,
+        )
+
+        assert r.status_code == 200
+        data = r.json()
+        assert data["answer"] == generator.TRUNCATED_ANSWER
+        assert data["sources"] == []
+        assert data["chunks_retrieved"] == 1
+        assert mock_groq_client.chat.completions.create.call_count == 2
+
+    def test_adjacent_overlap_is_removed_before_generation(
+        self, api_client, mock_qdrant_client, mock_groq_client, mock_embed
+    ):
+        overlap = "shared overlap text " * 6
+        mock_qdrant_client.query_points.return_value = SimpleNamespace(
+            points=[
+                _make_point(f"Phailin: about one million evacuated. {overlap}", page=32, chunk_index=0),
+                _make_point(f"{overlap}Kerala: about 480 deaths.", page=32, chunk_index=1),
+            ]
+        )
+        choice = SimpleNamespace(message=SimpleNamespace(content="Both records."))
+        mock_groq_client.chat.completions.create.return_value = SimpleNamespace(
+            choices=[choice]
+        )
+
+        r = api_client.post(
+            "/query",
+            json={"question": "Compare the Phailin and Kerala disasters."},
+            headers=AUTH,
+        )
+
+        assert r.status_code == 200
+        user_content = (
+            mock_groq_client.chat.completions.create.call_args.kwargs["messages"][1]["content"]
+        )
+        assert user_content.count(overlap) == 1
+        assert "Phailin: about one million evacuated." in user_content
+        assert "Kerala: about 480 deaths." in user_content
+        assert r.json()["chunks_retrieved"] == 2
+
+    def test_citation_markers_align_after_dropping_pure_overlap_chunk(
+        self, api_client, mock_qdrant_client, mock_groq_client, mock_embed
+    ):
+        overlap = "shared overlap text " * 6
+        mock_qdrant_client.query_points.return_value = SimpleNamespace(
+            points=[
+                _make_point(f"Phailin facts. {overlap}", page=32, chunk_index=0),
+                _make_point(overlap, page=32, chunk_index=1),
+                _make_point("Kerala facts.", page=33, chunk_index=0),
+            ]
+        )
+        choice = SimpleNamespace(
+            message=SimpleNamespace(content="Kerala facts. [Excerpt 2]")
+        )
+        mock_groq_client.chat.completions.create.return_value = SimpleNamespace(
+            choices=[choice]
+        )
+
+        r = api_client.post(
+            "/query",
+            json={"question": "Which record mentions Kerala?"},
+            headers=AUTH,
+        )
+
+        assert r.status_code == 200
+        data = r.json()
+        assert data["answer"] == "Kerala facts."
+        assert [s["page"] for s in data["sources"]] == [33]
+        assert data["chunks_retrieved"] == 3
 
 
 class TestToolProposalAndSynthesis:

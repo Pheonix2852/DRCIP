@@ -1,94 +1,75 @@
 # DRCIP Disaster Management RAG API
 
-A **production-ready**, lightweight RAG (Retrieval-Augmented Generation) API that answers questions about disaster-management documents with accurate page citations.
+A lightweight RAG (Retrieval-Augmented Generation) API that answers questions
+about disaster-management documents with page citations. Built with **FastAPI +
+Qdrant Cloud + Groq + Cloudflare Workers AI**.
 
-Built with **FastAPI + Qdrant Cloud + Groq** — designed to run on Render (use a 2 GB plan; see the memory note below).
+Embeddings run remotely through Cloudflare Workers AI, so the Render container
+does not load PyTorch, Transformers, or a local model.
 
 ---
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────┐
-│               Developer Machine (local)             │
-│  disaster.pdf ──► ingest.py ──► Qdrant Cloud        │
-│  (run once before deploying)                        │
-└─────────────────────────────────────────────────────┘
+Developer machine (local, run once)
+  disaster.pdf -> ingest.py -> Cloudflare Workers AI embeddings -> Qdrant Cloud
 
-┌─────────────────────────────────────────────────────┐
-│         Render Free Web Service (Docker)            │
-│                                                     │
-│  POST /query                                        │
-│    │                                                │
-│    ├─ 1. Embed question  (all-MiniLM-L6-v2, CPU)   │
-│    ├─ 2. Vector search   (Qdrant Cloud)             │
-│    ├─ 3. Score threshold check → abstain if low     │
-│    ├─ 4. Generate answer (Groq LLM)                 │
-│    └─ 5. Return answer + page citations             │
-└─────────────────────────────────────────────────────┘
+Render Docker service
+  POST /query
+    1. Embed question   (Cloudflare Workers AI, BGE-small-en-v1.5)
+    2. Vector search    (Qdrant Cloud, cosine)
+    3. Threshold check  (abstain when similarity is low)
+    4. Generate answer  (Groq LLM)
+    5. Return answer + page citations
 ```
 
 | Component | Technology |
 |---|---|
 | Framework | FastAPI + Uvicorn |
-| Embedding | `all-MiniLM-L6-v2` (384-dim, CPU) |
+| Embedding | Cloudflare Workers AI `@cf/baai/bge-small-en-v1.5` (384-dim, CLS pooling) |
 | LLM | Groq (`openai/gpt-oss-20b`) |
-| Vector DB | Qdrant Cloud (free tier, 1 GB RAM) |
+| Vector DB | Qdrant Cloud |
 | PDF parsing | pypdf |
-| Deployment | Render (Docker; 2 GB plan recommended) |
+| Deployment | Render (Docker) |
 
 ---
 
 ## Prerequisites
 
 - Python 3.11+
-- A [Qdrant Cloud](https://cloud.qdrant.io/) account (free cluster)
-- A [Groq](https://console.groq.com/) API key (free tier)
+- A [Qdrant Cloud](https://cloud.qdrant.io/) account
+- A [Groq](https://console.groq.com/) API key
+- A Cloudflare account and API token with Workers AI access
 
 ---
 
 ## Local Setup
 
-### 1. Clone and configure
+### 1. Configure environment
 
 ```bash
-git clone <your-repo-url>
-cd rag_drcip
-
 cp .env.example .env
-# Edit .env with your real credentials
+# Edit .env with real credentials; never commit .env.
 ```
 
 ### 2. Install dependencies
 
 ```bash
-# CPU-only PyTorch (MUST be first to avoid the 2 GB GPU build)
-pip install torch==2.4.1+cpu --index-url https://download.pytorch.org/whl/cpu
-
-# Application + dev dependencies
 pip install -r requirements.txt -r requirements-dev.txt
 ```
 
 ### 3. Ingest your PDF
 
-Run this **once locally** before deploying. The API on Render is read-only.
+Run this once locally before deploying. The API on Render is read-only.
 
 ```bash
-python -m ingest.ingest --pdf disaster.pdf
+python -m ingest.ingest --pdf disaster.pdf --collection disaster_docs_bge
 ```
 
-Options:
-
-```bash
-# Reset collection and re-ingest (useful after PDF updates)
-python -m ingest.ingest --pdf disaster.pdf --reset
-
-# Custom collection name
-python -m ingest.ingest --pdf disaster.pdf --collection my_collection
-
-# Verify available Groq models
-python -c "from groq import Groq; import os; c = Groq(api_key=os.environ['GROQ_API_KEY']); [print(m.id) for m in c.models.list().data]"
-```
+By default, ingestion targets `<QDRANT_COLLECTION>_bge` (for example
+`disaster_docs_bge`). It refuses to write BGE vectors into the active
+non-`_bge` collection by default.
 
 ### 4. Run the API locally
 
@@ -96,7 +77,19 @@ python -c "from groq import Groq; import os; c = Groq(api_key=os.environ['GROQ_A
 uvicorn app.main:app --reload --port 8000
 ```
 
-Visit `http://localhost:8000/docs` for the interactive Swagger UI.
+Open `http://localhost:8000/docs` for the interactive Swagger UI.
+
+---
+
+## Migrating from the legacy MiniLM collection
+
+The existing `disaster_docs` collection contains `all-MiniLM-L6-v2` vectors.
+BGE and MiniLM vector spaces are not compatible, so do not mix them.
+
+1. Ingest into a new collection (default `disaster_docs_bge`).
+2. Run representative queries against the new collection.
+3. Only after validation, set `QDRANT_COLLECTION=disaster_docs_bge`.
+4. Keep the old collection until the new one is verified; it is the rollback.
 
 ---
 
@@ -104,21 +97,17 @@ Visit `http://localhost:8000/docs` for the interactive Swagger UI.
 
 ### Authentication
 
-Every request to `/query` requires a bearer token:
+Every `/query` request requires a bearer token:
 
 ```
 Authorization: Bearer <your_api_key>
 ```
 
-API keys are set in the `API_KEYS` environment variable (comma-separated for rotation).
+API keys are set in `API_KEYS` (comma-separated for rotation).
 
 ---
 
 ### `POST /query`
-
-Ask a disaster-management question.
-
-**Request:**
 
 ```json
 {
@@ -128,23 +117,18 @@ Ask a disaster-management question.
 
 | Field | Type | Required | Constraints |
 |---|---|---|---|
-| `question` | string | ✅ | 3–500 characters |
+| `question` | string | yes | 3-500 characters |
 
-**Response — answer found (HTTP 200):**
+**Response - answer found (HTTP 200):**
 
 ```json
 {
-  "answer": "Coastal flooding evacuation procedures include immediate evacuation when Flood Alert Level 3 is declared. Residents must...",
+  "answer": "Coastal flooding evacuation procedures include immediate evacuation when Flood Alert Level 3 is declared.",
   "sources": [
     {
       "document": "disaster.pdf",
       "page": 12,
       "excerpt": "Residents must evacuate within 2 hours of a Flood Alert Level 3 declaration..."
-    },
-    {
-      "document": "disaster.pdf",
-      "page": 13,
-      "excerpt": "Designated evacuation routes are marked with green directional signage..."
     }
   ],
   "model": "openai/gpt-oss-20b",
@@ -152,7 +136,7 @@ Ask a disaster-management question.
 }
 ```
 
-**Response — out of scope / abstention (HTTP 200):**
+**Response - abstention (HTTP 200):**
 
 ```json
 {
@@ -163,48 +147,34 @@ Ask a disaster-management question.
 }
 ```
 
-> **Tip for consuming apps:** check `sources == []` to detect abstention programmatically.
-
-**Error responses:**
+Check `sources == []` to detect abstention programmatically.
 
 | HTTP | Condition |
 |---|---|
 | 401 | Invalid or missing bearer token |
-| 422 | Request body fails validation (e.g. question > 500 chars) |
-| 503 | Qdrant or Groq unreachable |
+| 422 | Request body fails validation |
+| 503 | Qdrant, Cloudflare, or Groq unavailable |
 
 ---
 
 ### `GET /health`
 
-Public liveness probe — no authentication required.
+Public liveness probe; no authentication required.
 
 ```json
 {
   "status": "ok",
   "qdrant": "connected",
-  "collection": "disaster_docs",
-  "model": "all-MiniLM-L6-v2",
+  "collection": "disaster_docs_bge",
+  "model": "@cf/baai/bge-small-en-v1.5",
   "model_loaded": true
 }
 ```
 
-`qdrant` values: `"connected"` | `"collection_missing"` | `"error"`
+`qdrant` values: `"connected"` | `"collection_missing"` | `"error"`.
 
----
-
-### `GET /`
-
-API discovery.
-
-```json
-{
-  "name": "DRCIP Disaster Management RAG API",
-  "version": "1.0.0",
-  "docs": "/docs",
-  "health": "/health"
-}
-```
+`model_loaded` now means the remote provider has served at least one successful
+embedding request in this process. No local model is loaded.
 
 ---
 
@@ -212,15 +182,21 @@ API discovery.
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
-| `QDRANT_URL` | ✅ | — | Qdrant Cloud cluster URL |
-| `QDRANT_API_KEY` | ✅ | — | Qdrant Cloud API key |
-| `GROQ_API_KEY` | ✅ | — | Groq API key |
-| `API_KEYS` | ✅ | — | Comma-separated bearer tokens |
-| `QDRANT_COLLECTION` | — | `disaster_docs` | Collection name |
-| `GROQ_MODEL` | — | `openai/gpt-oss-20b` | Groq model ID |
-| `TOP_K` | — | `5` | Chunks retrieved per query |
-| `SCORE_THRESHOLD` | — | `0.30` | Min cosine similarity for abstention |
-| `DATABASE_URL` | — | — | Neon PostgreSQL (future use) |
+| `QDRANT_URL` | yes | - | Qdrant Cloud cluster URL |
+| `QDRANT_API_KEY` | yes | - | Qdrant Cloud API key |
+| `GROQ_API_KEY` | yes | - | Groq API key |
+| `API_KEYS` | yes | - | Comma-separated bearer tokens |
+| `CLOUDFLARE_ACCOUNT_ID` | yes | - | Cloudflare account ID |
+| `CLOUDFLARE_API_TOKEN` | yes | - | Token with Workers AI access |
+| `QDRANT_COLLECTION` | no | `disaster_docs_bge` | Collection name; keep the legacy MiniLM collection separate |
+| `CLOUDFLARE_EMBEDDING_MODEL` | no | `@cf/baai/bge-small-en-v1.5` | Embedding model |
+| `CLOUDFLARE_EMBEDDING_TIMEOUT_SECONDS` | no | `30` | HTTP timeout |
+| `CLOUDFLARE_EMBEDDING_BATCH_SIZE` | no | `16` | Texts per provider request |
+| `CLOUDFLARE_EMBEDDING_POOLING` | no | `cls` | `cls` or `mean`; must match the ingested vectors |
+| `GROQ_MODEL` | no | `openai/gpt-oss-20b` | Groq model ID |
+| `TOP_K` | no | `5` | Chunks retrieved per query |
+| `SCORE_THRESHOLD` | no | `0.30` | Minimum cosine similarity before abstention |
+| `DATABASE_URL` | no | - | Reserved for future use |
 
 ---
 
@@ -228,110 +204,70 @@ API discovery.
 
 ```bash
 pytest tests/ -v
+ruff check app tests ingest
 ```
 
-Tests run fully offline — Qdrant and Groq are mocked.
+Tests run offline; Qdrant, Groq, and Cloudflare Workers AI are mocked.
 
 ---
 
 ## Render Deployment
 
-### Option A — One-click blueprint (recommended)
+### Option A - Blueprint
 
-1. Push repo to GitHub
-2. Render Dashboard → **New → Blueprint**
-3. Connect your repo — Render reads `render.yaml` automatically
-4. Set the four secret env vars in the Render dashboard:
-   - `QDRANT_URL`, `QDRANT_API_KEY`, `GROQ_API_KEY`, `API_KEYS`
-5. Click **Deploy**
+1. Push the repository to GitHub.
+2. In Render, choose **New -> Blueprint** and connect the repo.
+3. Set these secrets in Render: `QDRANT_URL`, `QDRANT_API_KEY`,
+   `GROQ_API_KEY`, `API_KEYS`, `CLOUDFLARE_ACCOUNT_ID`,
+   `CLOUDFLARE_API_TOKEN`.
+4. Deploy.
 
-### Option B — Manual
+### Option B - Manual
 
-1. Render Dashboard → **New → Web Service**
-2. Connect your GitHub repo
-3. Set **Language: Docker**, **Plan: Free**
-4. Add all environment variables from the table above
-5. Click **Create Web Service**
+1. Create a **New -> Web Service** from the repository.
+2. Set **Language: Docker**.
+3. Add the environment variables above.
+4. Deploy.
 
-### Memory requirement
+### Memory and cold starts
 
-The first inference loads PyTorch and `all-MiniLM-L6-v2`. In a fresh Linux
-container that peaks at the 512 MB cgroup ceiling (about 310 MB anonymous +
-~200 MB reclaimable file cache), leaving no headroom for concurrent first
-requests or provider payloads. **Use at least 2 GB RAM on Render** (`1c-2g`,
-the next web-service plan above 512 MB; Render has no 1 GB web tier). The free
-512 MB plan can serve a warm process but is not a reliable cold-start
-configuration. The free plan's 0.1 CPU also makes the first inference take
-about 150 s, which exceeds the backend's 60 s RAG timeout and returns 502.
-
-### Verify deployment
-
-```bash
-curl https://your-service.onrender.com/health
-```
-
-### Test the deployed API
-
-```bash
-curl -X POST https://your-service.onrender.com/query \
-  -H "Authorization: Bearer YOUR_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"question": "What is the emergency response protocol for earthquakes?"}'
-```
+The container no longer loads a local embedding model, so the previous PyTorch
+memory ceiling does not apply. A 512 MB instance is sufficient for the API
+process. Rendering the first response still depends on Qdrant, Cloudflare, and
+Groq network calls.
 
 ---
 
-## Keep-Alive Setup (Important!)
+## Keep-Alive Setup
 
-Render's free tier sleeps after **15 minutes of inactivity** (60-second cold start).  
-Qdrant's free cluster suspends after **7 days of inactivity**.
+Render's free tier sleeps after about 15 minutes of inactivity, and Qdrant's
+free cluster suspends after about 7 days of inactivity.
 
-**Fix both for free using [cron-job.org](https://cron-job.org):**
+Use a free scheduler such as [cron-job.org](https://cron-job.org):
 
-1. Sign up at cron-job.org (free)
-2. Create a cron job:
-   - URL: `https://your-service.onrender.com/health`
-   - Schedule: Every **13 minutes** (prevents Render sleep)
-3. This also pings Qdrant's client, keeping the cluster alive
+- URL: `https://your-service.onrender.com/health`
+- Schedule: every 13 minutes
 
-`/health` deliberately does not load the model, so the first `/query` after a
-restart still pays the cold-load cost. On the free 0.1 CPU plan that exceeds
-the backend's 60 s RAG timeout; use a 2 GB plan for reliable first requests.
+This keeps both the Render service and the Qdrant client active.
 
 ---
 
 ## Adding More Documents
 
-To add another PDF to the knowledge base:
-
 ```bash
-python -m ingest.ingest --pdf new_document.pdf
+python -m ingest.ingest --pdf new_document.pdf --collection disaster_docs_bge
 ```
 
-This upserts new chunks alongside existing ones. Existing chunks are not affected.
-
-To fully replace the knowledge base:
-
-```bash
-python -m ingest.ingest --pdf new_document.pdf --reset
-```
+Chunk IDs are deterministic, so re-running the same PDF is idempotent. To
+replace a collection completely, create a new collection name and validate it
+before switching `QDRANT_COLLECTION`; do not delete the only validated copy.
 
 ---
 
 ## Security Notes
 
-- Bearer tokens are validated server-side against `API_KEYS` env var
-- To rotate keys: add the new key to `API_KEYS` (comma-separated), deploy, then remove the old key and redeploy
-- The LLM system prompt contains injection-resistance instructions
-- HTTPS is terminated by Render's proxy — all traffic is encrypted in transit
-- Never commit `.env` — it is in `.gitignore`
-
----
-
-## Latency Expectations
-
-| Condition | Typical latency |
-|---|---|
-| Warm request (keep-alive active) | 700 ms – 1.8 s |
-| Cold start (no keep-alive) | + 50–60 seconds |
-| Upgrade to Render Starter ($7/mo) | No cold starts |
+- Bearer tokens are validated server-side against `API_KEYS`.
+- The LLM system prompt contains injection-resistance instructions.
+- HTTPS is terminated by Render's proxy.
+- Never commit `.env`; it is ignored by git.
+- Do not log Cloudflare or Qdrant credentials.

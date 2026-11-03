@@ -1,54 +1,23 @@
-# ── Stage: runtime ────────────────────────────────────────────────────────────
-# python:3.11-slim keeps the base image under 150 MB.
+# Lightweight runtime: embedding inference runs remotely through Cloudflare
+# Workers AI, so this image no longer needs PyTorch, Transformers,
+# Sentence Transformers, or a baked-in Hugging Face model cache.
 FROM python:3.11-slim
 
 WORKDIR /app
 
-# System deps for pypdf / sentence-transformers (no build-essential needed)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        curl \
-    && rm -rf /var/lib/apt/lists/*
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PORT=10000
 
-# ── Install CPU-only PyTorch FIRST ───────────────────────────────────────────
-# Must happen before sentence-transformers so pip doesn't pull the GPU build.
-# GPU PyTorch ≈ 2 GB; CPU-only ≈ 180 MB — critical for Render's 512 MB limit.
-RUN pip install --no-cache-dir \
-    torch==2.4.1+cpu \
-    torchvision==0.19.1+cpu \
-    --index-url https://download.pytorch.org/whl/cpu
-
-# ── Install application dependencies ─────────────────────────────────────────
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --disable-pip-version-check -r requirements.txt
 
-# ── Pre-download embedding model into the image ───────────────────────────────
-# Baking the model into the image layer means:
-#   • No network download at startup (no timeout risk on cold start)
-#   • Consistent behaviour across deployments
-# The model weighs ~22 MB on disk.
-ENV HF_HOME=/app/.cache/huggingface
-RUN python -c "from sentence_transformers import SentenceTransformer; \
-               SentenceTransformer('all-MiniLM-L6-v2'); \
-               print('Model cached successfully.')"
-
-# The model is already baked in the image. Prevent runtime hub checks/downloads:
-# a cold request must not allocate extra memory for a second download on the
-# 512 MB instance. Safe only because the RUN above populated HF_HOME.
-ENV HF_HUB_OFFLINE=1 \
-    TRANSFORMERS_OFFLINE=1
-
-# ── Copy application code ─────────────────────────────────────────────────────
-# Copy only the app/ directory — ingest/ and tests/ are not needed at runtime.
+# Copy only the application code; ingestion utilities and tests remain outside
+# the production image unless the application imports them at runtime.
 COPY app/ ./app/
 
-# ── Runtime config ────────────────────────────────────────────────────────────
-# Render injects $PORT (default 10000). Uvicorn binds to it.
-ENV PORT=10000
 EXPOSE 10000
 
-# Single worker is correct for Render's free single-vCPU instance.
-CMD ["uvicorn", "app.main:app", \
-     "--host", "0.0.0.0", \
-     "--port", "10000", \
-     "--workers", "1", \
-     "--log-level", "info"]
+# Honour Render's injected PORT while keeping one worker to avoid multiplying
+# process memory on the 512 MiB free instance.
+CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-10000} --workers 1 --log-level info"]

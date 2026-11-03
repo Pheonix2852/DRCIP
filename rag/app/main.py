@@ -3,7 +3,8 @@ FastAPI application entry point.
 
 Startup sequence (lifespan):
   1. Initialise Qdrant and Groq clients (cached via lru_cache).
-  2. The embedding model is loaded lazily on the first embedding request.
+  2. Embeddings are served remotely by Cloudflare Workers AI; no local model
+     is loaded. The first successful embedding request is tracked for health.
 
 Routes:
   GET  /          — API info
@@ -22,13 +23,17 @@ from qdrant_client import QdrantClient
 
 from app.dependencies import get_groq_client, get_qdrant_client, get_settings
 from app.routers import query
-from app.services.embedder import is_model_loaded
+from app.services.embedder import MODEL_NAME, is_model_loaded
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
 )
 logger = logging.getLogger(__name__)
+
+# httpx logs full request URLs at INFO, which includes the Cloudflare account ID.
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
 
 
 # ── Startup / shutdown ────────────────────────────────────────────────────────
@@ -110,6 +115,6 @@ def health(qdrant: QdrantClient = Depends(get_qdrant_client)):
         "status": "ok",
         "qdrant": qdrant_status,
         "collection": settings.qdrant_collection,
-        "model": "all-MiniLM-L6-v2",
+        "model": MODEL_NAME,
         "model_loaded": is_model_loaded(),
     }
