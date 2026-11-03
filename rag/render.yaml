@@ -30,7 +30,7 @@ services:
       - key: CLOUDFLARE_EMBEDDING_POOLING
         value: cls
       - key: QDRANT_COLLECTION
-        value: disaster_docs_bge_v2
+        value: disaster_docs
       - key: GROQ_MODEL
         value: openai/gpt-oss-20b
       - key: TOP_K

@@ -1,13 +1,11 @@
 """Cloudflare Workers AI embedding client.
 
-Preserves the existing public API:
+Public API:
     embed(text) -> list[float]
-    is_model_loaded() -> bool
+    embed_many(texts) -> list[list[float]]
 
-The default model is BAAI BGE-small-en-v1.5 (384 dimensions), which keeps the
-same vector length as the previous all-MiniLM-L6-v2 collection. Existing
-vectors MUST still be re-embedded because the two models produce different
-vector spaces.
+The model is BAAI BGE-small-en-v1.5 (384 dimensions, CLS pooling,
+L2-normalized). Inference is remote; no embedding model is loaded locally.
 
 Required environment variables:
     CLOUDFLARE_ACCOUNT_ID
@@ -40,7 +38,6 @@ _DEFAULT_BATCH_SIZE = 16
 
 _client: httpx.Client | None = None
 _client_lock = threading.Lock()
-_successful_request = threading.Event()
 
 
 class EmbeddingServiceError(RuntimeError):
@@ -182,9 +179,7 @@ def _request_batch(texts: Sequence[str]) -> list[list[float]]:
             f"Cloudflare returned {len(raw_vectors)} vectors for {len(texts)} inputs."
         )
 
-    vectors = [_normalise(vector) for vector in raw_vectors]
-    _successful_request.set()
-    return vectors
+    return [_normalise(vector) for vector in raw_vectors]
 
 
 def embed_many(texts: Sequence[str]) -> list[list[float]]:
@@ -224,12 +219,4 @@ def embed(text: str) -> list[float]:
     return vectors[0]
 
 
-def is_model_loaded() -> bool:
-    """Compatibility status: True after this process has completed one API call.
 
-    No embedding model is loaded in the Render process anymore; inference is
-    performed remotely by Cloudflare. The existing health response can retain
-    its `model_loaded` field temporarily, but it now means the remote provider
-    has successfully served at least one embedding request in this process.
-    """
-    return _successful_request.is_set()

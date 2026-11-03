@@ -58,9 +58,6 @@ def _embedding_env(monkeypatch):
     monkeypatch.setenv("CLOUDFLARE_EMBEDDING_BATCH_SIZE", "2")
     monkeypatch.setenv("CLOUDFLARE_EMBEDDING_POOLING", "cls")
     monkeypatch.delenv("CLOUDFLARE_EMBEDDING_MODEL", raising=False)
-    embedder._successful_request.clear()
-    yield
-    embedder._successful_request.clear()
 
 
 def test_embed_calls_cloudflare_and_returns_normalised_vector(monkeypatch):
@@ -79,7 +76,6 @@ def test_embed_calls_cloudflare_and_returns_normalised_vector(monkeypatch):
     assert len(vector) == embedder.EMBEDDING_DIM
     assert vector[0] == pytest.approx(0.6)
     assert vector[1] == pytest.approx(0.8)
-    assert embedder.is_model_loaded() is True
 
 
 def test_configured_model_is_used_in_url(monkeypatch):
@@ -145,7 +141,6 @@ def test_http_error_is_translated_without_leaking_token(monkeypatch):
     message = str(excinfo.value)
     assert "HTTP 429" in message
     assert "test_cloudflare_token" not in message
-    assert embedder.is_model_loaded() is False
 
 
 def test_timeout_is_translated(monkeypatch):
@@ -209,21 +204,4 @@ def test_vector_count_mismatch_is_rejected(monkeypatch):
         embedder.embed("text")
 
 
-def test_health_state_flips_only_after_a_successful_request(monkeypatch):
-    responses = [
-        httpx.Response(500, text="down"),
-        httpx.Response(200, json=_payload([_vector()])),
-    ]
 
-    def responder(call):
-        return responses.pop(0)
-
-    _install(monkeypatch, responder)
-
-    assert embedder.is_model_loaded() is False
-    with pytest.raises(embedder.EmbeddingServiceError):
-        embedder.embed("first")
-    assert embedder.is_model_loaded() is False
-
-    embedder.embed("second")
-    assert embedder.is_model_loaded() is True

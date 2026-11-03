@@ -91,7 +91,8 @@ class TestMetaEndpoints:
         data = r.json()
         assert data["status"] == "ok"
         assert data["qdrant"] == "connected"
-        assert data["model_loaded"] is False
+        assert data["collection"] == "test_collection"
+        assert "model_loaded" not in data
 
     def test_health_collection_missing(self, api_client, mock_qdrant_client):
         mock_qdrant_client.collection_exists.return_value = False

@@ -6,17 +6,16 @@ Run this script LOCALLY before deploying the API. The API on Render is
 read-only - it never ingests.
 
 Embeddings are produced by Cloudflare Workers AI (BGE-small-en-v1.5). The
-default target collection is the active collection name with a ``_bge``
-suffix, so legacy MiniLM vectors in the original collection are never mixed
-with the new vector space.
+canonical collection is ``disaster_docs`` and must contain only this vector
+space (384 dimensions, L2-normalized, COSINE).
 
 Usage
 -----
-    # Create/upsert the BGE collection (default: <QDRANT_COLLECTION>_bge)
+    # Create/upsert the canonical collection (QDRANT_COLLECTION or disaster_docs)
     python -m ingest.ingest --pdf disaster.pdf
 
     # Explicit collection name
-    python -m ingest.ingest --pdf disaster.pdf --collection disaster_docs_bge
+    python -m ingest.ingest --pdf disaster.pdf --collection disaster_docs
 
 Environment variables required (loaded from .env automatically):
     QDRANT_URL
@@ -43,11 +42,6 @@ load_dotenv()
 EMBEDDING_DIM = 384
 DEFAULT_MODEL = "@cf/baai/bge-small-en-v1.5"
 UPSERT_BATCH_SIZE = 32
-
-
-def _default_collection() -> str:
-    base = os.environ.get("QDRANT_COLLECTION", "disaster_docs").strip() or "disaster_docs"
-    return base if base.endswith("_bge") else f"{base}_bge"
 
 
 def _get_env(key: str) -> str:
@@ -117,25 +111,14 @@ def main() -> None:
     parser.add_argument("--pdf", required=True, help="Path to the PDF file.")
     parser.add_argument(
         "--collection",
-        default=_default_collection(),
-        help="Qdrant collection name (default: <QDRANT_COLLECTION>_bge).",
+        default=os.environ.get("QDRANT_COLLECTION", "disaster_docs").strip()
+        or "disaster_docs",
+        help="Qdrant collection name (default: QDRANT_COLLECTION or disaster_docs).",
     )
     args = parser.parse_args()
 
     if not os.path.isfile(args.pdf):
         print(f"[ERROR] File not found: {args.pdf}", file=sys.stderr)
-        sys.exit(1)
-
-    active_collection = os.environ.get("QDRANT_COLLECTION", "disaster_docs").strip()
-    protected = {"disaster_docs"}
-    if active_collection and not active_collection.endswith("_bge"):
-        protected.add(active_collection)
-    if args.collection in protected:
-        print(
-            f"[ERROR] Refusing to write {model_name} vectors into the legacy "
-            f"collection '{args.collection}'. Use a separate collection.",
-            file=sys.stderr,
-        )
         sys.exit(1)
 
     qdrant_url = _get_env("QDRANT_URL")
@@ -176,7 +159,7 @@ def main() -> None:
     print(f"  Collection : {args.collection}")
     print(f"  Chunks     : {len(chunks)}")
     print(f"  Model      : {model_name} (dim={EMBEDDING_DIM})")
-    print(f"\nSet QDRANT_COLLECTION={args.collection} only after validating retrieval.")
+    print(f"\nCanonical collection: QDRANT_COLLECTION={args.collection}")
 
 
 if __name__ == "__main__":

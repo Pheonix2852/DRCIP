@@ -23,7 +23,7 @@ from qdrant_client import QdrantClient
 
 from app.dependencies import get_groq_client, get_qdrant_client, get_settings
 from app.routers import query
-from app.services.embedder import MODEL_NAME, is_model_loaded
+from app.services.embedder import MODEL_NAME
 
 logging.basicConfig(
     level=logging.INFO,
@@ -116,5 +116,4 @@ def health(qdrant: QdrantClient = Depends(get_qdrant_client)):
         "qdrant": qdrant_status,
         "collection": settings.qdrant_collection,
         "model": MODEL_NAME,
-        "model_loaded": is_model_loaded(),
     }

@@ -18,7 +18,7 @@ Developer machine (local, run once)
 Render Docker service
   POST /query
     1. Embed question   (Cloudflare Workers AI, BGE-small-en-v1.5)
-    2. Vector search    (Qdrant Cloud, cosine)
+    2. Vector search    (Qdrant Cloud, canonical disaster_docs, cosine)
     3. Threshold check  (abstain when similarity is low)
     4. Generate answer  (Groq LLM)
     5. Return answer + page citations
@@ -27,9 +27,9 @@ Render Docker service
 | Component | Technology |
 |---|---|
 | Framework | FastAPI + Uvicorn |
-| Embedding | Cloudflare Workers AI `@cf/baai/bge-small-en-v1.5` (384-dim, CLS pooling) |
+| Embedding | Cloudflare Workers AI `@cf/baai/bge-small-en-v1.5` (384-dim, CLS pooling, L2-normalized) |
 | LLM | Groq (`openai/gpt-oss-20b`) |
-| Vector DB | Qdrant Cloud |
+| Vector DB | Qdrant Cloud, collection `disaster_docs` |
 | PDF parsing | pypdf |
 | Deployment | Render (Docker) |
 
@@ -64,12 +64,12 @@ pip install -r requirements.txt -r requirements-dev.txt
 Run this once locally before deploying. The API on Render is read-only.
 
 ```bash
-python -m ingest.ingest --pdf disaster.pdf --collection disaster_docs_bge
+python -m ingest.ingest --pdf disaster.pdf
 ```
 
-By default, ingestion targets `<QDRANT_COLLECTION>_bge` (for example
-`disaster_docs_bge`). It refuses to write BGE vectors into the active
-non-`_bge` collection by default.
+By default, ingestion targets `QDRANT_COLLECTION` (default: `disaster_docs`).
+The canonical collection contains only BGE-small-en-v1.5 vectors: 384
+dimensions, L2-normalized, COSINE distance.
 
 ### 4. Run the API locally
 
@@ -81,15 +81,14 @@ Open `http://localhost:8000/docs` for the interactive Swagger UI.
 
 ---
 
-## Migrating from the legacy MiniLM collection
+## Canonical Collection
 
-The existing `disaster_docs` collection contains `all-MiniLM-L6-v2` vectors.
-BGE and MiniLM vector spaces are not compatible, so do not mix them.
+The production collection is `disaster_docs`. It contains the validated 202
+BGE-small-en-v1.5 vectors from `disaster.pdf` (384 dimensions, L2-normalized,
+COSINE distance). Do not mix embedding spaces in this collection.
 
-1. Ingest into a new collection (default `disaster_docs_bge`).
-2. Run representative queries against the new collection.
-3. Only after validation, set `QDRANT_COLLECTION=disaster_docs_bge`.
-4. Keep the old collection until the new one is verified; it is the rollback.
+If you change the embedding model, create a separate collection, re-embed and
+validate it, then migrate to the canonical name before switching traffic.
 
 ---
 
@@ -165,16 +164,16 @@ Public liveness probe; no authentication required.
 {
   "status": "ok",
   "qdrant": "connected",
-  "collection": "disaster_docs_bge",
-  "model": "@cf/baai/bge-small-en-v1.5",
-  "model_loaded": true
+  "collection": "disaster_docs",
+  "model": "@cf/baai/bge-small-en-v1.5"
 }
 ```
 
 `qdrant` values: `"connected"` | `"collection_missing"` | `"error"`.
 
-`model_loaded` now means the remote provider has served at least one successful
-embedding request in this process. No local model is loaded.
+No embedding model is loaded in the API process. `model` is the configured
+remote Cloudflare Workers AI embedding model; `/query` verifies inference
+availability. There is no local-model status field.
 
 ---
 
@@ -188,7 +187,7 @@ embedding request in this process. No local model is loaded.
 | `API_KEYS` | yes | - | Comma-separated bearer tokens |
 | `CLOUDFLARE_ACCOUNT_ID` | yes | - | Cloudflare account ID |
 | `CLOUDFLARE_API_TOKEN` | yes | - | Token with Workers AI access |
-| `QDRANT_COLLECTION` | no | `disaster_docs_bge` | Collection name; keep the legacy MiniLM collection separate |
+| `QDRANT_COLLECTION` | no | `disaster_docs` | Canonical Qdrant collection name |
 | `CLOUDFLARE_EMBEDDING_MODEL` | no | `@cf/baai/bge-small-en-v1.5` | Embedding model |
 | `CLOUDFLARE_EMBEDDING_TIMEOUT_SECONDS` | no | `30` | HTTP timeout |
 | `CLOUDFLARE_EMBEDDING_BATCH_SIZE` | no | `16` | Texts per provider request |
@@ -255,12 +254,13 @@ This keeps both the Render service and the Qdrant client active.
 ## Adding More Documents
 
 ```bash
-python -m ingest.ingest --pdf new_document.pdf --collection disaster_docs_bge
+python -m ingest.ingest --pdf new_document.pdf
 ```
 
 Chunk IDs are deterministic, so re-running the same PDF is idempotent. To
-replace a collection completely, create a new collection name and validate it
-before switching `QDRANT_COLLECTION`; do not delete the only validated copy.
+replace the embedding model or rebuild the corpus, create a separate
+collection, validate it, and migrate to `disaster_docs` only after verification;
+do not delete the only validated copy.
 
 ---
 

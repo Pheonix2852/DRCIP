@@ -255,7 +255,7 @@ class TestIngestEmbedding:
             return [[0.1] * 384 for _ in texts]
 
         total = embed_and_upsert(
-            client, "disaster_docs_bge", chunks, batch_size=2, embed_many=fake_embed_many
+            client, "disaster_docs", chunks, batch_size=2, embed_many=fake_embed_many
         )
 
         assert total == 3
@@ -281,7 +281,7 @@ class TestIngestEmbedding:
         with pytest.raises(RuntimeError, match="0 vectors for 1 chunks"):
             embed_and_upsert(
                 client,
-                "disaster_docs_bge",
+                "disaster_docs",
                 [self._chunk(0)],
                 embed_many=lambda texts: [],
             )
@@ -291,5 +291,5 @@ class TestIngestEmbedding:
     def test_empty_chunks_are_a_noop(self):
         client = MagicMock()
 
-        assert embed_and_upsert(client, "disaster_docs_bge", [], embed_many=lambda texts: []) == 0
+        assert embed_and_upsert(client, "disaster_docs", [], embed_many=lambda texts: []) == 0
         client.upsert.assert_not_called()

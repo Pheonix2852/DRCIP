@@ -21,6 +21,9 @@ env/
 .coverage
 htmlcov/
 
+# Local Qdrant migration backups
+backups/
+
 # Editor
 .vscode/
 .idea/
