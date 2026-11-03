@@ -53,6 +53,11 @@ _ABSTENTION = (
     "Please consult official sources or rephrase your query."
 )
 
+_TOOL_CALL_REJECTED = (
+    "I could not generate a valid operational data request for that question. "
+    "Please rephrase it, or name a specific incident, resource type, or location."
+)
+
 
 # ── Pydantic schemas ──────────────────────────────────────────────────────────
 
@@ -304,6 +309,14 @@ def query_endpoint(
                 question=body.question,
                 chunks=chunks,
                 tools=[tool.model_dump() for tool in tools],
+            )
+        except generator.ToolCallRejectedError as exc:
+            logger.warning("Tool proposal rejected by provider: %s", exc)
+            return QueryResponse(
+                answer=_TOOL_CALL_REJECTED,
+                sources=[],
+                model=settings.groq_model,
+                chunks_retrieved=retrieved_count,
             )
         except Exception as exc:
             raise _unavailable("Generation service", exc) from exc

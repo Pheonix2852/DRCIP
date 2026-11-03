@@ -22,6 +22,7 @@ from fastapi.testclient import TestClient
 
 from app.dependencies import get_groq_client, get_qdrant_client
 from app.main import app
+from app.services import generator
 
 VALID_KEY = "test_bearer_key_123"
 AUTH = {"Authorization": f"Bearer {VALID_KEY}"}
@@ -709,6 +710,34 @@ class TestToolProposalAndSynthesis:
         assert data["answer"] == "Shelter X is open. Live stock is 11."
         assert len(data["sources"]) == 1
         assert data["sources"][0]["page"] == 12
+
+    def test_rejected_tool_call_returns_graceful_answer(
+        self, api_client, mock_qdrant_client, mock_embed
+    ):
+        mock_qdrant_client.query_points.return_value = SimpleNamespace(points=[])
+
+        with patch(
+            "app.routers.query.generator.propose",
+            side_effect=generator.ToolCallRejectedError("invalid arguments"),
+        ):
+            r = api_client.post(
+                "/query",
+                json={
+                    "question": "What is the total resource stock?",
+                    "tools": [
+                        {
+                            "name": "get_resource_stock",
+                            "description": "Stock.",
+                            "parameters": {"type": "object", "properties": {}},
+                        }
+                    ],
+                },
+                headers=AUTH,
+            )
+
+        assert r.status_code == 200
+        assert "valid operational data request" in r.json()["answer"]
+        assert r.json()["sources"] == []
 
 
 class TestUpstreamFailures:

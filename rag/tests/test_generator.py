@@ -32,6 +32,12 @@ def _response(*choices):
     return SimpleNamespace(choices=list(choices))
 
 
+class _ProviderError(Exception):
+    def __init__(self, body):
+        super().__init__("provider detail")
+        self.body = body
+
+
 @pytest.fixture(autouse=True)
 def _no_retry_sleep(monkeypatch):
     monkeypatch.setattr(generator, "_RETRY_DELAY_SECONDS", 0)
@@ -320,3 +326,112 @@ class TestPromptGuidance:
         assert "general guidance (not event-specific)" in prompt
         assert "do not return insufficient_context when the excerpts support general guidance" in prompt
         assert "do not use this when the excerpts support a partial answer" in prompt
+
+
+class TestToolArgumentNormalization:
+    schema = {
+        "type": "object",
+        "properties": {
+            "resource_type": {"type": "string"},
+            "latitude": {"type": "number"},
+            "limit": {"type": "integer", "default": 10},
+        },
+        "required": ["latitude"],
+    }
+
+    def test_provider_schema_allows_null_only_for_optional_properties(self):
+        parameters = generator._provider_parameters(self.schema)
+
+        assert parameters["properties"]["resource_type"] == {
+            "anyOf": [{"type": "string"}, {"type": "null"}]
+        }
+        assert parameters["properties"]["limit"] == {
+            "anyOf": [{"type": "integer", "default": 10}, {"type": "null"}]
+        }
+        assert parameters["properties"]["latitude"] == {"type": "number"}
+        assert parameters["required"] == ["latitude"]
+        assert generator._provider_parameters(self.schema) is not parameters
+
+    def test_parser_drops_null_optional_arguments(self):
+        tool_call = SimpleNamespace(
+            id="call_1",
+            function=SimpleNamespace(
+                name="get_resource_stock",
+                arguments=(
+                    '{"resource_type": null, "latitude": 22.5, '
+                    '"limit": 10}'
+                ),
+            ),
+        )
+
+        proposals = generator._parse_tool_calls(
+            [tool_call],
+            {"get_resource_stock": self.schema},
+        )
+
+        assert proposals == [
+            {
+                "id": "call_1",
+                "name": "get_resource_stock",
+                "arguments": {"latitude": 22.5, "limit": 10},
+            }
+        ]
+
+    def test_parser_rejects_null_required_arguments(self):
+        tool_call = SimpleNamespace(
+            id="call_1",
+            function=SimpleNamespace(
+                name="get_resource_stock",
+                arguments='{"latitude": null, "limit": 10}',
+            ),
+        )
+
+        proposals = generator._parse_tool_calls(
+            [tool_call],
+            {"get_resource_stock": self.schema},
+        )
+
+        assert proposals == []
+
+    def test_parser_drops_unknown_null_arguments(self):
+        tool_call = SimpleNamespace(
+            id="call_1",
+            function=SimpleNamespace(
+                name="get_resource_stock",
+                arguments='{"latitude": 22.5, "unexpected": null}',
+            ),
+        )
+
+        proposals = generator._parse_tool_calls(
+            [tool_call],
+            {"get_resource_stock": self.schema},
+        )
+
+        assert proposals == []
+
+    def test_tool_use_failure_is_identified_from_provider_body(self):
+        exc = _ProviderError({"error": {"code": "tool_use_failed"}})
+
+        assert generator._is_tool_use_failure(exc) is True
+
+    def test_propose_maps_tool_use_failure_to_rejected_error(self):
+        error = _ProviderError(
+            {"error": {"code": "tool_use_failed", "message": "invalid"}}
+        )
+        client = MagicMock()
+        client.chat.completions.create.side_effect = error
+
+        with pytest.raises(generator.ToolCallRejectedError):
+            generator.propose(
+                client=client,
+                model="test-model",
+                question="What is the total resource stock?",
+                chunks=[],
+                tools=[
+                    {
+                        "name": "get_resource_stock",
+                        "description": "Stock.",
+                        "parameters": self.schema,
+                    }
+                ],
+            )
