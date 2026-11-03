@@ -2,7 +2,7 @@
 
 A **production-ready**, lightweight RAG (Retrieval-Augmented Generation) API that answers questions about disaster-management documents with accurate page citations.
 
-Built with **FastAPI + Qdrant Cloud + Groq** — designed to run on Render's free tier.
+Built with **FastAPI + Qdrant Cloud + Groq** — designed to run on Render (use a 2 GB plan; see the memory note below).
 
 ---
 
@@ -35,7 +35,7 @@ Built with **FastAPI + Qdrant Cloud + Groq** — designed to run on Render's fre
 | LLM | Groq (`openai/gpt-oss-20b`) |
 | Vector DB | Qdrant Cloud (free tier, 1 GB RAM) |
 | PDF parsing | pypdf |
-| Deployment | Render (Docker, free tier) |
+| Deployment | Render (Docker; 2 GB plan recommended) |
 
 ---
 
@@ -253,6 +253,17 @@ Tests run fully offline — Qdrant and Groq are mocked.
 4. Add all environment variables from the table above
 5. Click **Create Web Service**
 
+### Memory requirement
+
+The first inference loads PyTorch and `all-MiniLM-L6-v2`. In a fresh Linux
+container that peaks at the 512 MB cgroup ceiling (about 310 MB anonymous +
+~200 MB reclaimable file cache), leaving no headroom for concurrent first
+requests or provider payloads. **Use at least 2 GB RAM on Render** (`1c-2g`,
+the next web-service plan above 512 MB; Render has no 1 GB web tier). The free
+512 MB plan can serve a warm process but is not a reliable cold-start
+configuration. The free plan's 0.1 CPU also makes the first inference take
+about 150 s, which exceeds the backend's 60 s RAG timeout and returns 502.
+
 ### Verify deployment
 
 ```bash
@@ -282,6 +293,10 @@ Qdrant's free cluster suspends after **7 days of inactivity**.
    - URL: `https://your-service.onrender.com/health`
    - Schedule: Every **13 minutes** (prevents Render sleep)
 3. This also pings Qdrant's client, keeping the cluster alive
+
+`/health` deliberately does not load the model, so the first `/query` after a
+restart still pays the cold-load cost. On the free 0.1 CPU plan that exceeds
+the backend's 60 s RAG timeout; use a 2 GB plan for reliable first requests.
 
 ---
 

@@ -78,6 +78,45 @@ def test_subsequent_embeds_reuse_the_cached_model(monkeypatch):
     assert created == [embedder.MODEL_NAME]
 
 
+def test_failed_init_is_not_cached_and_can_retry(monkeypatch):
+    calls: list[int] = []
+
+    def factory() -> _FakeModel:
+        calls.append(1)
+        if len(calls) == 1:
+            raise RuntimeError("model load failed")
+        return _FakeModel(embedder.MODEL_NAME)
+
+    monkeypatch.setattr("app.services.embedder._create_model", factory)
+
+    with pytest.raises(RuntimeError, match="model load failed"):
+        embedder.embed("flood")
+
+    assert embedder.is_model_loaded() is False
+    assert embedder.embed("flood") == [0.0] * embedder.EMBEDDING_DIM
+    assert len(calls) == 2
+
+
+def test_repeated_sequential_embeds_reuse_one_model(monkeypatch):
+    created = _install_fake_model(monkeypatch)
+
+    for index in range(20):
+        assert embedder.embed(f"question {index}") == [0.0] * embedder.EMBEDDING_DIM
+
+    assert created == [embedder.MODEL_NAME]
+
+
+def test_concurrent_embeds_after_load_reuse_one_model(monkeypatch):
+    created = _install_fake_model(monkeypatch)
+    embedder.embed("warm")
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        vectors = list(pool.map(lambda _: embedder.embed("flood"), range(8)))
+
+    assert created == [embedder.MODEL_NAME]
+    assert all(vector == [0.0] * embedder.EMBEDDING_DIM for vector in vectors)
+
+
 def test_concurrent_first_embeds_load_model_once(monkeypatch):
     created: list[str] = []
 

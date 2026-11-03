@@ -31,6 +31,12 @@ RUN python -c "from sentence_transformers import SentenceTransformer; \
                SentenceTransformer('all-MiniLM-L6-v2'); \
                print('Model cached successfully.')"
 
+# The model is already baked in the image. Prevent runtime hub checks/downloads:
+# a cold request must not allocate extra memory for a second download on the
+# 512 MB instance. Safe only because the RUN above populated HF_HOME.
+ENV HF_HUB_OFFLINE=1 \
+    TRANSFORMERS_OFFLINE=1
+
 # ── Copy application code ─────────────────────────────────────────────────────
 # Copy only the app/ directory — ingest/ and tests/ are not needed at runtime.
 COPY app/ ./app/
