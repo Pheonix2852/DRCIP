@@ -249,7 +249,13 @@ describe('HostedRagProvider response mapping', () => {
     fetchMock.mockResolvedValue(
       response(
         providerPayload({
-          tool_calls: [{ tool: 'execute_sql', arguments: { query: 'select 1' } }],
+          tool_calls: [
+            {
+              tool: 'execute_sql',
+              arguments: { query: 'select 1' },
+              error_code: 'UNKNOWN_TOOL',
+            },
+          ],
         }),
       ),
     );
@@ -258,7 +264,11 @@ describe('HostedRagProvider response mapping', () => {
 
     expect(result.status).toBe('GROUNDED');
     expect(result.tool_invocations).toEqual([
-      { tool: 'execute_sql', arguments: { query: 'select 1' } },
+      {
+        tool: 'execute_sql',
+        arguments: { query: 'select 1' },
+        errorCode: 'UNKNOWN_TOOL',
+      },
     ]);
   });
 
@@ -276,6 +286,40 @@ describe('HostedRagProvider response mapping', () => {
     expect(result.citations).toEqual([
       { title: 'Evacuation Guidance', page: 2 },
     ]);
+  });
+  it('keeps a provider tool-call rejection distinct from document abstention', async () => {
+    fetchMock.mockResolvedValue(
+      response(
+        providerPayload({
+          answer: 'I could not generate a valid operational data request.',
+          sources: [],
+          provider_status: 'TOOL_CALL_REJECTED',
+        }),
+      ),
+    );
+
+    const result = await provider().query('What now?');
+
+    expect(result.status).toBe('ABSTAINED');
+    expect(result.providerStatus).toBe('TOOL_CALL_REJECTED');
+    expect(result.tool_invocations).toBeUndefined();
+  });
+
+  it('does not expose an unknown provider status as a rejection', async () => {
+    fetchMock.mockResolvedValue(
+      response(
+        providerPayload({
+          answer: 'No answer.',
+          sources: [],
+          provider_status: 'SOMETHING_ELSE',
+        }),
+      ),
+    );
+
+    const result = await provider().query('What now?');
+
+    expect(result.status).toBe('ABSTAINED');
+    expect(result.providerStatus).toBeUndefined();
   });
 });
 

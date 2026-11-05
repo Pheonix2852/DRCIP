@@ -138,4 +138,28 @@ describe('RAG 2.0 frozen live-tool contracts', () => {
     ).toBe('LIVE_OPERATIONAL_DATA');
     expect(() => ragLiveEvidenceSchema.parse(call)).toThrow();
   });
+
+  it('represents rejected proposals without making them live evidence', () => {
+    const call = {
+      tool: 'INVALID',
+      outcome: 'ERROR',
+      as_of: new Date().toISOString(),
+      returned_count: 0,
+      truncated: false,
+      requested_tool: 'execute_sql',
+      error_code: 'UNKNOWN_TOOL',
+    };
+
+    expect(ragToolCallSchema.parse(call)).toMatchObject({
+      tool: 'INVALID',
+      requested_tool: 'execute_sql',
+      error_code: 'UNKNOWN_TOOL',
+    });
+    expect(() =>
+      ragLiveEvidenceSchema.parse({
+        ...call,
+        evidence_type: 'LIVE_OPERATIONAL_DATA',
+      }),
+    ).toThrow();
+  });
 });

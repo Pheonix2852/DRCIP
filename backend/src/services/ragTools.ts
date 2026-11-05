@@ -193,9 +193,7 @@ function toTeamRecord(team: TeamWithRelations): RagTeamRecord {
   };
 }
 
-function toShelterRecord(
-  row: ShelterRow & { latitude: number; longitude: number },
-): RagShelterRecord {
+function toShelterRecord(row: ShelterRow): RagShelterRecord {
   return {
     shelter_id: row.id,
     name: row.name,
@@ -351,12 +349,7 @@ async function getShelterCapacity(
       queryShelterList({ scope, query }),
       queryShelterAggregate({ scope, query }),
     ]);
-    const records = list.items
-      .filter(
-        (row): row is ShelterRow & { latitude: number; longitude: number } =>
-          row.latitude !== null && row.longitude !== null,
-      )
-      .map(toShelterRecord);
+    const records = list.items.map(toShelterRecord);
     return {
       records,
       total: list.total,

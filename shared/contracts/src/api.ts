@@ -393,8 +393,8 @@ export interface RagShelterRecord {
   total_capacity: number;
   current_occupancy: number;
   available_capacity: number;
-  latitude: number;
-  longitude: number;
+  latitude: number | null;
+  longitude: number | null;
   capabilities: Record<string, unknown>;
   updated_at: string;
 }
@@ -463,14 +463,17 @@ export type RagToolResult<T extends RagToolName> =
   | RagToolFailureResult<T>;
 
 export interface RagToolCall {
-  tool: RagToolName;
+  tool: RagToolName | 'INVALID';
   outcome: RagToolOutcome;
   as_of: string;
   returned_count: number;
   truncated: boolean;
+  requested_tool?: string;
+  error_code?: string;
 }
 
-export interface RagLiveEvidence extends RagToolCall {
+export interface RagLiveEvidence extends Omit<RagToolCall, 'tool'> {
+  tool: RagToolName;
   evidence_type: 'LIVE_OPERATIONAL_DATA';
 }
 
@@ -481,6 +484,7 @@ export interface RagQueryResponse {
   tool_calls: RagToolCall[];
   rag_version: string;
   live_evidence?: RagLiveEvidence[];
+  provider_status?: 'TOOL_CALL_REJECTED';
 }
 
 // Intelligence

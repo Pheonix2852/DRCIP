@@ -10,7 +10,11 @@ These tests call the real provider and are skipped by default.
 """
 from __future__ import annotations
 
+import json
 import os
+import shutil
+import subprocess
+from pathlib import Path
 
 import pytest
 from groq import Groq
@@ -22,123 +26,29 @@ pytestmark = pytest.mark.skipif(
     reason="set RUN_GROQ_INTEGRATION=1 to call the real Groq API",
 )
 
-_LIMIT = {
-    "type": "integer",
-    "minimum": 1,
-    "maximum": 50,
-    "default": 10,
-    "description": "Maximum individual records to return (1-50, default 10).",
-}
-_LATITUDE = {"type": "number", "minimum": -90, "maximum": 90}
-_LONGITUDE = {"type": "number", "minimum": -180, "maximum": 180}
-_RADIUS = {"type": "number", "exclusiveMinimum": 0, "maximum": 100}
 
-_TOOLS = [
-    {
-        "name": "get_active_incidents",
-        "description": (
-            "List active (not resolved) disaster incidents. Use for questions "
-            "about current incidents, affected people, severity, or incident "
-            "locations."
-        ),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "status": {
-                    "type": "string",
-                    "enum": ["REPORTED", "TRIAGE_PENDING", "IN_RESPONSE"],
-                },
-                "limit": _LIMIT,
-            },
-        },
-    },
-    {
-        "name": "get_nearby_ambulances",
-        "description": "List ambulance resources near a location.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "latitude": _LATITUDE,
-                "longitude": _LONGITUDE,
-                "radius_km": _RADIUS,
-                "status": {
-                    "type": "string",
-                    "enum": ["AVAILABLE", "ASSIGNED", "DEPLOYED"],
-                },
-                "limit": _LIMIT,
-            },
-            "required": ["latitude", "longitude", "radius_km"],
-        },
-    },
-    {
-        "name": "get_available_rescue_teams",
-        "description": "List active rescue teams, optionally by capability.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "capability": {"type": "string"},
-                "limit": _LIMIT,
-            },
-        },
-    },
-    {
-        "name": "get_shelter_capacity",
-        "description": "Shelter capacity and aggregate totals.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "status": {
-                    "type": "string",
-                    "enum": ["AVAILABLE", "FULL", "UNAVAILABLE"],
-                },
-                "min_available_capacity": {"type": "integer", "minimum": 0},
-                "latitude": _LATITUDE,
-                "longitude": _LONGITUDE,
-                "radius_km": _RADIUS,
-                "limit": _LIMIT,
-            },
-        },
-    },
-    {
-        "name": "get_resource_stock",
-        "description": "Operational resource stock with aggregate quantity totals.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "resource_type": {
-                    "type": "string",
-                    "enum": ["AMBULANCE", "FOOD", "MEDICAL_KIT", "PERSONNEL"],
-                },
-                "status": {
-                    "type": "string",
-                    "enum": ["AVAILABLE", "ASSIGNED", "DEPLOYED"],
-                },
-                "latitude": _LATITUDE,
-                "longitude": _LONGITUDE,
-                "radius_km": _RADIUS,
-                "limit": _LIMIT,
-            },
-        },
-    },
-    {
-        "name": "get_current_assignments",
-        "description": "Current field-team assignments.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "incident_id": {"type": "string"},
-                "status": {
-                    "type": "string",
-                    "enum": ["PENDING", "ASSIGNED", "IN_PROGRESS", "COMPLETED"],
-                },
-                "limit": _LIMIT,
-            },
-        },
-    },
-]
+@pytest.fixture(scope="module")
+def production_tools():
+    """Load the exact provider-facing definitions shipped by the Node backend."""
+    npx = shutil.which("npx")
+    assert npx is not None, "npx is required to load the production tool definitions"
+    script = (
+        "import { RAG_TOOL_DEFINITIONS } from "
+        "'./backend/src/services/ragToolDefinitions.ts'; "
+        "console.log(JSON.stringify(RAG_TOOL_DEFINITIONS));"
+    )
+    output = subprocess.check_output(
+        [npx, "tsx", "-e", script],
+        cwd=Path(__file__).resolve().parents[2],
+        text=True,
+    )
+    return json.loads(output)
 
 _CASES = [
     ("How many active incidents are there right now?", "get_active_incidents"),
+    ("Total incidents", "get_active_incidents"),
+    ("Total active incidents", "get_active_incidents"),
+    ("Total resources available", "get_resource_stock"),
     (
         "Which ambulances are within 10 km of latitude 22.5, longitude 88.3?",
         "get_nearby_ambulances",
@@ -162,13 +72,15 @@ def _model() -> str:
 
 
 @pytest.mark.parametrize(("question", "expected"), _CASES)
-def test_natural_language_selects_the_expected_tool(question, expected):
+def test_natural_language_selects_the_expected_tool(
+    question, expected, production_tools
+):
     _, proposals = generator.propose(
         client=_client(),
         model=_model(),
         question=question,
         chunks=[],
-        tools=_TOOLS,
+        tools=production_tools,
     )
 
     assert proposals, f"no tool proposal for: {question}"
@@ -180,8 +92,12 @@ def test_natural_language_selects_the_expected_tool(question, expected):
     )
 
 
-def test_provider_accepts_null_optional_arguments_and_normalization_removes_them():
-    tool = next(tool for tool in _TOOLS if tool["name"] == "get_resource_stock")
+def test_provider_accepts_null_optional_arguments_and_normalization_removes_them(
+    production_tools,
+):
+    tool = next(
+        tool for tool in production_tools if tool["name"] == "get_resource_stock"
+    )
     response = _client().chat.completions.create(
         model=_model(),
         messages=[
@@ -215,8 +131,14 @@ def test_provider_accepts_null_optional_arguments_and_normalization_removes_them
     )
 
 
-def test_malformed_required_arguments_are_identified_as_tool_use_failures():
-    tool = next(tool for tool in _TOOLS if tool["name"] == "get_nearby_ambulances")
+def test_malformed_required_arguments_are_identified_as_tool_use_failures(
+    production_tools,
+):
+    tool = next(
+        tool
+        for tool in production_tools
+        if tool["name"] == "get_nearby_ambulances"
+    )
 
     with pytest.raises(Exception) as raised:
         _client().chat.completions.create(

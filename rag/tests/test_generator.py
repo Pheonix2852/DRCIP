@@ -327,6 +327,268 @@ class TestPromptGuidance:
         assert "do not return insufficient_context when the excerpts support general guidance" in prompt
         assert "do not use this when the excerpts support a partial answer" in prompt
 
+    def test_tool_prompt_routes_current_totals_to_live_tools(self):
+        prompt = " ".join(generator._TOOL_SYSTEM_PROMPT.lower().split())
+        assert "overall total, count, availability, or current status" in prompt
+        assert "never present a value from a document excerpt as the current operational total" in prompt
+        assert "historical, event-specific, policy, guideline and report questions" in prompt
+
+    def test_synthesis_prompt_forbids_document_count_substitution(self):
+        prompt = " ".join(generator._SYNTHESIS_SYSTEM_PROMPT.lower().split())
+        assert "the live result is the only valid source" in prompt
+        assert "never substitute a number from a document excerpt" in prompt
+
+
+class TestToolCallFinishHandling:
+    schema = {
+        "type": "object",
+        "properties": {
+            "status": {"type": "string"},
+            "limit": {"type": "integer"},
+        },
+        "additionalProperties": False,
+    }
+    tools = [
+        {
+            "name": "get_active_incidents",
+            "description": "Active incidents.",
+            "parameters": schema,
+        }
+    ]
+
+    @staticmethod
+    def _tool_call(call_id, name, arguments):
+        return SimpleNamespace(
+            id=call_id,
+            function=SimpleNamespace(name=name, arguments=arguments),
+        )
+
+    def test_single_valid_tool_call_finish_is_returned_without_retry(self):
+        client = MagicMock()
+        client.chat.completions.create.return_value = _response(
+            SimpleNamespace(
+                message=SimpleNamespace(
+                    content="",
+                    tool_calls=[
+                        self._tool_call("call_1", "get_active_incidents", "{}")
+                    ],
+                ),
+                finish_reason="tool_calls",
+            )
+        )
+
+        content, proposals = generator.propose(
+            client=client,
+            model="test-model",
+            question="Total incidents",
+            chunks=[],
+            tools=self.tools,
+        )
+
+        assert content == ""
+        assert proposals == [
+            {
+                "id": "call_1",
+                "name": "get_active_incidents",
+                "arguments": {},
+            }
+        ]
+        assert client.chat.completions.create.call_count == 1
+
+    def test_multiple_valid_tool_calls_are_all_returned_without_retry(self):
+        client = MagicMock()
+        client.chat.completions.create.return_value = _response(
+            SimpleNamespace(
+                message=SimpleNamespace(
+                    content="",
+                    tool_calls=[
+                        self._tool_call(
+                            "call_1",
+                            "get_active_incidents",
+                            '{"status":"REPORTED"}',
+                        ),
+                        self._tool_call("call_2", "get_active_incidents", "{}"),
+                    ],
+                ),
+                finish_reason="tool_calls",
+            )
+        )
+
+        _, proposals = generator.propose(
+            client=client,
+            model="test-model",
+            question="Total active incidents",
+            chunks=[],
+            tools=self.tools,
+        )
+
+        assert [proposal["id"] for proposal in proposals] == ["call_1", "call_2"]
+        assert [proposal["arguments"] for proposal in proposals] == [
+            {"status": "REPORTED"},
+            {},
+        ]
+        assert client.chat.completions.create.call_count == 1
+
+    def test_malformed_arguments_are_surfaced_without_retry(self):
+        client = MagicMock()
+        client.chat.completions.create.return_value = _response(
+            SimpleNamespace(
+                message=SimpleNamespace(
+                    content="",
+                    tool_calls=[
+                        self._tool_call(
+                            "call_1", "get_active_incidents", "{not-json"
+                        )
+                    ],
+                ),
+                finish_reason="tool_calls",
+            )
+        )
+
+        _, proposals = generator.propose(
+            client=client,
+            model="test-model",
+            question="Total incidents",
+            chunks=[],
+            tools=self.tools,
+        )
+
+        assert proposals == [
+            {
+                "id": "call_1",
+                "name": "get_active_incidents",
+                "arguments": {},
+                "error_code": "MALFORMED_ARGUMENTS",
+            }
+        ]
+        assert client.chat.completions.create.call_count == 1
+
+    def test_unknown_tool_is_surfaced_without_retry(self):
+        client = MagicMock()
+        client.chat.completions.create.return_value = _response(
+            SimpleNamespace(
+                message=SimpleNamespace(
+                    content="",
+                    tool_calls=[
+                        self._tool_call("call_1", "execute_sql", '{"query":"x"}')
+                    ],
+                ),
+                finish_reason="tool_calls",
+            )
+        )
+
+        _, proposals = generator.propose(
+            client=client,
+            model="test-model",
+            question="Total incidents",
+            chunks=[],
+            tools=self.tools,
+        )
+
+        assert proposals == [
+            {
+                "id": "call_1",
+                "name": "execute_sql",
+                "arguments": {},
+                "error_code": "UNKNOWN_TOOL",
+            }
+        ]
+        assert client.chat.completions.create.call_count == 1
+
+    def test_tool_calls_finish_reason_without_calls_is_unusable(self):
+        client = MagicMock()
+        client.chat.completions.create.return_value = _response(
+            SimpleNamespace(
+                message=SimpleNamespace(content="", tool_calls=[]),
+                finish_reason="tool_calls",
+            )
+        )
+
+        with pytest.raises(generator.GenerationUnusableError):
+            generator.propose(
+                client=client,
+                model="test-model",
+                question="Total incidents",
+                chunks=[],
+                tools=self.tools,
+            )
+
+        assert client.chat.completions.create.call_count == 2
+
+    def test_length_finish_retries_then_raises_truncated(self):
+        client = MagicMock()
+        client.chat.completions.create.side_effect = [
+            _response(_choice("partial", finish_reason="length")),
+            _response(_choice("still partial", finish_reason="length")),
+        ]
+
+        with pytest.raises(generator.GenerationTruncatedError):
+            generator.propose(
+                client=client,
+                model="test-model",
+                question="Total incidents",
+                chunks=[],
+                tools=self.tools,
+            )
+
+        assert client.chat.completions.create.call_count == 2
+
+    def test_transient_provider_error_retries_once(self):
+        client = MagicMock()
+        client.chat.completions.create.side_effect = [
+            RuntimeError("temporary provider failure"),
+            _response(
+                SimpleNamespace(
+                    message=SimpleNamespace(
+                        content="",
+                        tool_calls=[
+                            self._tool_call(
+                                "call_1", "get_active_incidents", "{}"
+                            )
+                        ],
+                    ),
+                    finish_reason="tool_calls",
+                )
+            ),
+        ]
+
+        _, proposals = generator.propose(
+            client=client,
+            model="test-model",
+            question="Total incidents",
+            chunks=[],
+            tools=self.tools,
+        )
+
+        assert proposals[0]["name"] == "get_active_incidents"
+        assert client.chat.completions.create.call_count == 2
+
+    def test_propose_uses_tool_reminder_for_document_chunks(self):
+        client = MagicMock()
+        client.chat.completions.create.return_value = _response(
+            SimpleNamespace(
+                message=SimpleNamespace(
+                    content="",
+                    tool_calls=[
+                        self._tool_call("call_1", "get_active_incidents", "{}")
+                    ],
+                ),
+                finish_reason="tool_calls",
+            )
+        )
+
+        generator.propose(
+            client=client,
+            model="test-model",
+            question="Total incidents",
+            chunks=[_chunk("Historical total incidents: 120")],
+            tools=self.tools,
+        )
+
+        messages = client.chat.completions.create.call_args.kwargs["messages"]
+        assert generator._TOOL_ATTRIBUTION_REMINDER in messages[1]["content"]
+        assert generator._ATTRIBUTION_REMINDER not in messages[1]["content"]
+
 
 class TestToolArgumentNormalization:
     schema = {
@@ -391,9 +653,16 @@ class TestToolArgumentNormalization:
             {"get_resource_stock": self.schema},
         )
 
-        assert proposals == []
+        assert proposals == [
+            {
+                "id": "call_1",
+                "name": "get_resource_stock",
+                "arguments": {"latitude": None, "limit": 10},
+                "error_code": "INVALID_ARGUMENTS",
+            }
+        ]
 
-    def test_parser_drops_unknown_null_arguments(self):
+    def test_parser_rejects_unknown_arguments(self):
         tool_call = SimpleNamespace(
             id="call_1",
             function=SimpleNamespace(
@@ -407,7 +676,183 @@ class TestToolArgumentNormalization:
             {"get_resource_stock": self.schema},
         )
 
-        assert proposals == []
+        assert proposals == [
+            {
+                "id": "call_1",
+                "name": "get_resource_stock",
+                "arguments": {"latitude": 22.5, "unexpected": None},
+                "error_code": "INVALID_ARGUMENTS",
+            }
+        ]
+
+    def test_parser_preserves_unknown_tool_for_node_audit(self):
+        tool_call = SimpleNamespace(
+            id="call_1",
+            function=SimpleNamespace(
+                name="execute_sql",
+                arguments='{"query": "select 1"}',
+            ),
+        )
+
+        proposals = generator._parse_tool_calls(
+            [tool_call],
+            {"get_resource_stock": self.schema},
+        )
+
+        assert proposals == [
+            {
+                "id": "call_1",
+                "name": "execute_sql",
+                "arguments": {},
+                "error_code": "UNKNOWN_TOOL",
+            }
+        ]
+
+    def test_parser_preserves_malformed_json_for_node_audit(self):
+        tool_call = SimpleNamespace(
+            id="call_1",
+            function=SimpleNamespace(
+                name="get_resource_stock",
+                arguments="{not-json",
+            ),
+        )
+
+        proposals = generator._parse_tool_calls(
+            [tool_call],
+            {"get_resource_stock": self.schema},
+        )
+
+        assert proposals == [
+            {
+                "id": "call_1",
+                "name": "get_resource_stock",
+                "arguments": {},
+                "error_code": "MALFORMED_ARGUMENTS",
+            }
+        ]
+
+    def test_parser_preserves_non_object_arguments_for_node_audit(self):
+        tool_call = SimpleNamespace(
+            id="call_1",
+            function=SimpleNamespace(
+                name="get_resource_stock",
+                arguments='["latitude", 22.5]',
+            ),
+        )
+
+        proposals = generator._parse_tool_calls(
+            [tool_call],
+            {"get_resource_stock": self.schema},
+        )
+
+        assert proposals == [
+            {
+                "id": "call_1",
+                "name": "get_resource_stock",
+                "arguments": {},
+                "error_code": "MALFORMED_ARGUMENTS",
+            }
+        ]
+
+    def test_propose_retries_a_length_cut_proposal_with_a_larger_budget(self):
+        tool_call = SimpleNamespace(
+            id="call_1",
+            function=SimpleNamespace(
+                name="get_resource_stock",
+                arguments='{"latitude": 22.5}',
+            ),
+        )
+        client = MagicMock()
+        client.chat.completions.create.side_effect = [
+            _response(_choice("partial", finish_reason="length")),
+            _response(
+                SimpleNamespace(
+                    message=SimpleNamespace(content="", tool_calls=[tool_call]),
+                    finish_reason="stop",
+                )
+            ),
+        ]
+
+        content, proposals = generator.propose(
+            client=client,
+            model="test-model",
+            question="What is the total resource stock?",
+            chunks=[],
+            tools=[
+                {
+                    "name": "get_resource_stock",
+                    "description": "Stock.",
+                    "parameters": self.schema,
+                }
+            ],
+        )
+
+        assert content == ""
+        assert proposals == [
+            {
+                "id": "call_1",
+                "name": "get_resource_stock",
+                "arguments": {"latitude": 22.5},
+            }
+        ]
+        calls = client.chat.completions.create.call_args_list
+        assert calls[0].kwargs["max_tokens"] == 768
+        assert calls[1].kwargs["max_tokens"] == 1536
+
+    def test_propose_retries_empty_choices_then_fails_controlled(self):
+        client = MagicMock()
+        client.chat.completions.create.side_effect = [_response(), _response()]
+
+        with pytest.raises(generator.GenerationUnusableError):
+            generator.propose(
+                client=client,
+                model="test-model",
+                question="What is the total resource stock?",
+                chunks=[],
+                tools=[
+                    {
+                        "name": "get_resource_stock",
+                        "description": "Stock.",
+                        "parameters": self.schema,
+                    }
+                ],
+            )
+
+        assert client.chat.completions.create.call_count == 2
+
+    def test_synthesize_retries_truncation_then_raises(self):
+        client = MagicMock()
+        client.chat.completions.create.return_value = _response(
+            _choice("partial", finish_reason="length")
+        )
+
+        with pytest.raises(generator.GenerationTruncatedError):
+            generator.synthesize(
+                client=client,
+                model="test-model",
+                question="List incidents.",
+                chunks=[],
+                tool_results=[{"tool": "get_active_incidents", "outcome": "SUCCESS"}],
+            )
+
+        calls = client.chat.completions.create.call_args_list
+        assert calls[0].kwargs["max_tokens"] == 2048
+        assert calls[1].kwargs["max_tokens"] == 4096
+
+    def test_synthesize_retries_empty_choices_then_fails_controlled(self):
+        client = MagicMock()
+        client.chat.completions.create.side_effect = [_response(), _response()]
+
+        with pytest.raises(generator.GenerationUnusableError):
+            generator.synthesize(
+                client=client,
+                model="test-model",
+                question="List incidents.",
+                chunks=[],
+                tool_results=[{"tool": "get_active_incidents", "outcome": "SUCCESS"}],
+            )
+
+        assert client.chat.completions.create.call_count == 2
 
     def test_tool_use_failure_is_identified_from_provider_body(self):
         exc = _ProviderError({"error": {"code": "tool_use_failed"}})

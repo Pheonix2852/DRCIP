@@ -344,7 +344,7 @@ class TestToolProposalAndSynthesis:
             id="call_1",
             function=SimpleNamespace(
                 name="get_active_incidents",
-                arguments='{"status":"ACTIVE"}',
+                arguments='{"status":"REPORTED"}',
             ),
         )
         choice = SimpleNamespace(
@@ -362,7 +362,17 @@ class TestToolProposalAndSynthesis:
                         "description": "List active incidents.",
                         "parameters": {
                             "type": "object",
-                            "properties": {"status": {"type": "string"}},
+                            "properties": {
+                                "status": {
+                                    "type": "string",
+                                    "enum": [
+                                        "REPORTED",
+                                        "TRIAGE_PENDING",
+                                        "IN_RESPONSE",
+                                    ],
+                                }
+                            },
+                            "additionalProperties": False,
                         },
                     }
                 ],
@@ -375,11 +385,11 @@ class TestToolProposalAndSynthesis:
             {
                 "id": "call_1",
                 "name": "get_active_incidents",
-                "arguments": {"status": "ACTIVE"},
+                "arguments": {"status": "REPORTED"},
             }
         ]
 
-    def test_unknown_proposal_is_dropped(
+    def test_unknown_proposal_is_returned_for_node_audit(
         self, api_client, mock_qdrant_client, mock_groq_client, mock_embed
     ):
         mock_qdrant_client.query_points.return_value = SimpleNamespace(points=[])
@@ -412,8 +422,14 @@ class TestToolProposalAndSynthesis:
 
         assert r.status_code == 200
         data = r.json()
-        assert data["tool_calls"] == []
-        assert "could not find" in data["answer"].lower()
+        assert data["tool_calls"] == [
+            {
+                "id": "call_1",
+                "name": "execute_sql",
+                "arguments": {},
+                "error_code": "UNKNOWN_TOOL",
+            }
+        ]
 
     def test_continuation_synthesizes_from_tool_results(
         self, api_client, mock_qdrant_client, mock_groq_client, mock_embed
@@ -524,13 +540,15 @@ class TestToolProposalAndSynthesis:
 
         # The synthesis call must only use parameters supported by the pinned
         # Groq SDK, so mock-based tests cannot mask a signature mismatch.
-        call_kwargs = mock_groq_client.chat.completions.create.call_args.kwargs
+        calls = mock_groq_client.chat.completions.create.call_args_list
         supported = inspect.signature(
             Groq(api_key="test").chat.completions.create
         ).parameters
-        assert set(call_kwargs) <= set(supported)
-        assert call_kwargs["max_tokens"] == 2048
-        assert "max_completion_tokens" not in call_kwargs
+        for call in calls:
+            assert set(call.kwargs) <= set(supported)
+            assert "max_completion_tokens" not in call.kwargs
+        assert calls[0].kwargs["max_tokens"] == 2048
+        assert calls[-1].kwargs["max_tokens"] == 4096
 
     @pytest.mark.parametrize("content", ["", "INSUFFICIENT_CONTEXT"])
     def test_continuation_success_with_unusable_synthesis_reports_counts(
@@ -738,6 +756,114 @@ class TestToolProposalAndSynthesis:
         assert r.status_code == 200
         assert "valid operational data request" in r.json()["answer"]
         assert r.json()["sources"] == []
+        assert r.json()["provider_status"] == "TOOL_CALL_REJECTED"
+
+
+class TestOperationalQuestionPipeline:
+    @staticmethod
+    def _tool_definition(name: str) -> dict:
+        return {
+            "name": name,
+            "description": "Approved operational tool.",
+            "parameters": {"type": "object", "properties": {}},
+        }
+
+    @pytest.mark.parametrize(
+        ("question", "tool_name"),
+        [
+            ("Total resources available", "get_resource_stock"),
+            ("Total incidents", "get_active_incidents"),
+            ("Total active incidents", "get_active_incidents"),
+        ],
+    )
+    def test_operational_total_questions_accept_live_tool_proposals(
+        self,
+        api_client,
+        mock_qdrant_client,
+        mock_groq_client,
+        mock_embed,
+        question,
+        tool_name,
+    ):
+        mock_qdrant_client.query_points.return_value = SimpleNamespace(
+            points=[_make_point("Historical total incidents: 120.", page=4)]
+        )
+        tool_call = SimpleNamespace(
+            id="call_1",
+            function=SimpleNamespace(name=tool_name, arguments="{}"),
+        )
+        mock_groq_client.chat.completions.create.return_value = SimpleNamespace(
+            choices=[
+                SimpleNamespace(
+                    message=SimpleNamespace(content="", tool_calls=[tool_call]),
+                    finish_reason="tool_calls",
+                )
+            ]
+        )
+
+        r = api_client.post(
+            "/query",
+            json={
+                "question": question,
+                "tools": [self._tool_definition(tool_name)],
+            },
+            headers=AUTH,
+        )
+
+        assert r.status_code == 200
+        data = r.json()
+        assert data["tool_calls"] == [
+            {"id": "call_1", "name": tool_name, "arguments": {}}
+        ]
+        assert "provider_status" not in data
+
+    @pytest.mark.parametrize(
+        ("question", "document_text"),
+        [
+            ("Show me the latest disaster report", "The latest disaster report."),
+            (
+                "What are the disaster response guidelines?",
+                "Disaster response guidelines.",
+            ),
+        ],
+    )
+    def test_document_questions_still_use_document_retrieval(
+        self,
+        api_client,
+        mock_qdrant_client,
+        mock_groq_client,
+        mock_embed,
+        question,
+        document_text,
+    ):
+        mock_qdrant_client.query_points.return_value = SimpleNamespace(
+            points=[_make_point(document_text, page=17)]
+        )
+        mock_groq_client.chat.completions.create.return_value = SimpleNamespace(
+            choices=[
+                SimpleNamespace(
+                    message=SimpleNamespace(
+                        content=f"{document_text} *Excerpt 1*"
+                    ),
+                    finish_reason="stop",
+                )
+            ]
+        )
+
+        r = api_client.post(
+            "/query",
+            json={
+                "question": question,
+                "tools": [self._tool_definition("get_active_incidents")],
+            },
+            headers=AUTH,
+        )
+
+        assert r.status_code == 200
+        data = r.json()
+        assert data["tool_calls"] == []
+        assert data["answer"] == document_text
+        assert [source["page"] for source in data["sources"]] == [17]
 
 
 class TestUpstreamFailures:

@@ -431,6 +431,170 @@ describe('RAG live tools', () => {
     expect(result.records.some((record) => record.shelter_id === unassignedShelter.publicId)).toBe(false);
   });
 
+  it('scopes active incidents to active assignment statuses only', async () => {
+    const officer = await createAuthedUser('FIELD_OFFICER');
+    const otherOfficer = await createAuthedUser('FIELD_OFFICER');
+    const citizen = await createAuthedUser('CITIZEN');
+    const coordinator = await createAuthedUser('DISASTER_COORDINATOR');
+    const team = await createTeam({ leaderUserId: officer.user.id });
+    const otherTeam = await createTeam({ leaderUserId: otherOfficer.user.id });
+
+    const assignmentStatuses = ['ASSIGNED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'] as const;
+    const incidents = new Map<(typeof assignmentStatuses)[number], string>();
+    for (const status of assignmentStatuses) {
+      const incident = await createIncident(citizen.token, { description: `Incident ${status}` });
+      const record = await prisma.incident.findUniqueOrThrow({
+        where: { publicId: incident.body.data.incident_id },
+      });
+      incidents.set(status, incident.body.data.incident_id);
+      await prisma.assignment.create({
+        data: {
+          publicId: publicId('ASN'),
+          incidentId: record.id,
+          assignedBy: coordinator.user.id,
+          status,
+          assignedAt: new Date(),
+          fieldTeamId: team.id,
+        },
+      });
+    }
+
+    const otherIncident = await createIncident(citizen.token, { description: 'Other team' });
+    const otherRecord = await prisma.incident.findUniqueOrThrow({
+      where: { publicId: otherIncident.body.data.incident_id },
+    });
+    await prisma.assignment.create({
+      data: {
+        publicId: publicId('ASN'),
+        incidentId: otherRecord.id,
+        assignedBy: coordinator.user.id,
+        status: 'ASSIGNED',
+        assignedAt: new Date(),
+        fieldTeamId: otherTeam.id,
+      },
+    });
+
+    const ctx = await resolveRagToolContext({
+      userId: officer.user.id,
+      userRole: 'FIELD_OFFICER',
+    });
+    const result = await executeRagTool(ctx, 'get_active_incidents', { limit: 50 });
+
+    expect(result.outcome).toBe('SUCCESS');
+    if (result.outcome !== 'SUCCESS') throw new Error('expected active incident results');
+    expect(result.total).toBe(2);
+    expect(result.records.map((record) => record.incident_id).sort()).toEqual(
+      [incidents.get('ASSIGNED')!, incidents.get('IN_PROGRESS')!].sort(),
+    );
+    expect(result.records.map((record) => record.incident_id)).not.toContain(
+      incidents.get('COMPLETED'),
+    );
+    expect(result.records.map((record) => record.incident_id)).not.toContain(
+      incidents.get('CANCELLED'),
+    );
+    expect(result.records.map((record) => record.incident_id)).not.toContain(
+      otherIncident.body.data.incident_id,
+    );
+  });
+
+  it('preserves shelter records with unavailable coordinates', async () => {
+    const coordinator = await createAuthedUser('DISASTER_COORDINATOR');
+    const ctx = await resolveRagToolContext({
+      userId: coordinator.user.id,
+      userRole: 'DISASTER_COORDINATOR',
+    });
+    const withCoordinates = await createShelter({
+      name: 'With coordinates',
+      total_capacity: 100,
+      current_occupancy: 20,
+    });
+    const withoutCoordinates = await createShelter({
+      name: 'Without coordinates',
+      latitude: null,
+      longitude: null,
+      total_capacity: 50,
+      current_occupancy: 10,
+    });
+
+    const result = await executeRagTool(ctx, 'get_shelter_capacity', { limit: 10 });
+    expect(result.outcome).toBe('SUCCESS');
+    if (result.outcome !== 'SUCCESS') throw new Error('expected shelter results');
+    expect(result.returned_count).toBe(2);
+    expect(result.total).toBe(2);
+    expect(result.truncated).toBe(false);
+    expect(result.records).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          shelter_id: withCoordinates.publicId,
+          latitude: expect.any(Number),
+          longitude: expect.any(Number),
+        }),
+        expect.objectContaining({
+          shelter_id: withoutCoordinates.publicId,
+          latitude: null,
+          longitude: null,
+        }),
+      ]),
+    );
+    expect(result.aggregate).toMatchObject({
+      shelter_count: 2,
+      counted_shelters: 2,
+      unknown_capacity_count: 0,
+      total_capacity: 150,
+      current_occupancy: 30,
+      available_capacity: 120,
+    });
+  });
+
+  it('does not report EMPTY when every shelter has unavailable coordinates', async () => {
+    const coordinator = await createAuthedUser('DISASTER_COORDINATOR');
+    const ctx = await resolveRagToolContext({
+      userId: coordinator.user.id,
+      userRole: 'DISASTER_COORDINATOR',
+    });
+    const shelter = await createShelter({
+      name: 'No coordinates',
+      latitude: null,
+      longitude: null,
+      total_capacity: 75,
+      current_occupancy: 5,
+    });
+
+    const result = await executeRagTool(ctx, 'get_shelter_capacity', { limit: 10 });
+    expect(result.outcome).toBe('SUCCESS');
+    if (result.outcome !== 'SUCCESS') throw new Error('expected shelter results');
+    expect(result.returned_count).toBe(1);
+    expect(result.total).toBe(1);
+    expect(result.records[0]).toMatchObject({
+      shelter_id: shelter.publicId,
+      latitude: null,
+      longitude: null,
+    });
+    expect(result.aggregate).toMatchObject({
+      shelter_count: 1,
+      total_capacity: 75,
+      current_occupancy: 5,
+      available_capacity: 70,
+    });
+  });
+
+  it('reports EMPTY only when no qualifying shelters exist', async () => {
+    const coordinator = await createAuthedUser('DISASTER_COORDINATOR');
+    const ctx = await resolveRagToolContext({
+      userId: coordinator.user.id,
+      userRole: 'DISASTER_COORDINATOR',
+    });
+
+    const result = await executeRagTool(ctx, 'get_shelter_capacity', { limit: 10 });
+    expect(result).toMatchObject({
+      outcome: 'EMPTY',
+      returned_count: 0,
+      total: 0,
+      truncated: false,
+      records: [],
+    });
+  });
+
   it('scopes assignments and filters by trimmed incident id', async () => {
     const officer = await createAuthedUser('FIELD_OFFICER');
     const otherOfficer = await createAuthedUser('FIELD_OFFICER');

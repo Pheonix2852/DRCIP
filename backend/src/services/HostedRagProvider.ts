@@ -21,6 +21,7 @@ interface HostedResponse {
   answer?: unknown;
   sources?: unknown;
   tool_calls?: unknown;
+  provider_status?: unknown;
 }
 
 function nonEmptyString(value: unknown): string | undefined {
@@ -87,6 +88,7 @@ function mapProposal(value: unknown): RagToolProposal {
     id: raw.id,
     tool: raw.tool ?? raw.name,
     arguments: raw.arguments ?? raw.args,
+    errorCode: raw.error_code,
   };
 }
 
@@ -120,6 +122,9 @@ function mapResponse(payload: unknown): RagProviderResult | null {
       : { status: 'GROUNDED', answer: answer ?? '', citations };
 
   if (toolInvocations) result.tool_invocations = toolInvocations;
+  if (body.provider_status === 'TOOL_CALL_REJECTED') {
+    result.providerStatus = 'TOOL_CALL_REJECTED';
+  }
   return result;
 }
 

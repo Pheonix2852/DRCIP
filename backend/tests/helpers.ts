@@ -122,8 +122,8 @@ export async function createResource(
 export async function createShelter(
   overrides: {
     name?: string
-    latitude?: number
-    longitude?: number
+    latitude?: number | null
+    longitude?: number | null
     total_capacity?: number
     current_occupancy?: number
     status?: string
@@ -141,12 +141,16 @@ export async function createShelter(
     ...overrides,
   }
   const ref = publicId('SHL')
+  const location =
+    o.latitude === null || o.longitude === null
+      ? Prisma.sql`ST_GeogFromText('POINT EMPTY')`
+      : Prisma.sql`ST_SetSRID(ST_MakePoint(${o.longitude}, ${o.latitude}), 4326)::geography`
   const rows = await prisma.$queryRaw<{ id: string }[]>`
     INSERT INTO "Shelter"
       ("id","publicId","name","location","totalCapacity","currentOccupancy","status","capabilities","createdAt","updatedAt")
     VALUES (
       gen_random_uuid(), ${ref}, ${o.name},
-      ST_SetSRID(ST_MakePoint(${o.longitude}, ${o.latitude}), 4326)::geography,
+      ${location},
       ${o.total_capacity}, ${o.current_occupancy}, ${o.status}::"ShelterStatus",
       ${JSON.stringify(o.capabilities)}::jsonb, now(), now()
     )

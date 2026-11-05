@@ -114,6 +114,7 @@ class ToolCallProposal(BaseModel):
     id: str
     name: str
     arguments: dict[str, Any] = Field(default_factory=dict)
+    error_code: str | None = Field(default=None, max_length=50)
 
 
 class QueryResponse(BaseModel):
@@ -122,6 +123,7 @@ class QueryResponse(BaseModel):
     model: str
     chunks_retrieved: int
     tool_calls: list[ToolCallProposal] = Field(default_factory=list)
+    provider_status: Literal["TOOL_CALL_REJECTED"] | None = None
 
 
 _EXCERPT_MARKER = re.compile(
@@ -185,6 +187,7 @@ def _verify_key(
 @router.post(
     "/query",
     response_model=QueryResponse,
+    response_model_exclude_none=True,
     summary="Ask a disaster-management question",
     description=(
         "Embeds the question, retrieves relevant document chunks from Qdrant, "
@@ -273,6 +276,20 @@ def query_endpoint(
                 model=settings.groq_model,
                 chunks_retrieved=retrieved_count,
             )
+        except generator.GenerationUnusableError:
+            # The provider could not produce a usable synthesis after retries.
+            # Still return the authoritative counts instead of failing the turn.
+            answer = (
+                "Live operational data was retrieved, but a generated summary "
+                "was unavailable.\n\n"
+                + generator.deterministic_summary(results)
+            )
+            return QueryResponse(
+                answer=answer,
+                sources=[],
+                model=settings.groq_model,
+                chunks_retrieved=retrieved_count,
+            )
         except Exception as exc:
             raise _unavailable("Generation service", exc) from exc
 
@@ -317,6 +334,7 @@ def query_endpoint(
                 sources=[],
                 model=settings.groq_model,
                 chunks_retrieved=retrieved_count,
+                provider_status="TOOL_CALL_REJECTED",
             )
         except Exception as exc:
             raise _unavailable("Generation service", exc) from exc

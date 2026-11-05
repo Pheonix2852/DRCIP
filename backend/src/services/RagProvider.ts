@@ -38,6 +38,7 @@ export interface RagToolProposal {
   id?: unknown;
   tool: unknown;
   arguments: unknown;
+  errorCode?: unknown;
 }
 
 // Complete aggregates over the authorized dataset, independent of any result
@@ -92,6 +93,9 @@ export interface RagProviderResult {
   // Optional model-requested live tools. The provider only proposes calls; the
   // Node boundary validates, authorizes and executes them.
   tool_invocations?: RagToolProposal[];
+  // Non-sensitive diagnostic for a provider-side tool-call rejection. It is
+  // distinct from ordinary document abstention.
+  providerStatus?: 'TOOL_CALL_REJECTED';
 }
 
 export interface RagProvider {

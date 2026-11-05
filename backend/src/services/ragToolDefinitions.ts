@@ -44,7 +44,7 @@ export const RAG_TOOL_DEFINITIONS: readonly RagProviderToolDefinition[] = [
   {
     name: 'get_active_incidents',
     description:
-      'List active (not resolved) disaster incidents. Use for questions about current incidents, affected people, severity, or incident locations.',
+      'List active (not resolved) disaster incidents. Use for questions about current incidents, the current total incident count, active-incident totals, affected people, severity, or incident locations.',
     parameters: {
       type: 'object',
       properties: {
@@ -103,7 +103,7 @@ export const RAG_TOOL_DEFINITIONS: readonly RagProviderToolDefinition[] = [
   {
     name: 'get_resource_stock',
     description:
-      'Operational resource stock. The result includes a complete aggregate over all authorized resources (resource_count, counted_resources, unknown_quantity_count, total_quantity, by_type) plus individual records. Use aggregate.total_quantity or aggregate.by_type for quantity totals; do not count or sum the capped records list.',
+      'Operational resource stock. Use for questions about total resources available, stock levels, or quantity totals. The result includes a complete aggregate over all authorized resources (resource_count, counted_resources, unknown_quantity_count, total_quantity, by_type) plus individual records. Use aggregate.total_quantity or aggregate.by_type for quantity totals; do not count or sum the capped records list.',
     parameters: {
       type: 'object',
       properties: {

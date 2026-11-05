@@ -57,7 +57,9 @@ function incidentScopeSql(scope: IncidentAccessScope): Prisma.Sql {
         SELECT 1
         FROM "Assignment" a
         JOIN "FieldTeam" t ON a."fieldTeamId" = t.id
-        WHERE a."incidentId" = i.id AND t."leaderUserId" = ${scope.userId}
+        WHERE a."incidentId" = i.id
+          AND t."leaderUserId" = ${scope.userId}
+          AND a."status" IN ('ASSIGNED', 'IN_PROGRESS')
       )`;
     case 'ALL':
       return Prisma.sql`TRUE`;

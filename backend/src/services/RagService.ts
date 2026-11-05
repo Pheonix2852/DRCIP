@@ -171,6 +171,7 @@ interface ExecutedInvocation {
   call?: RagToolCall;
   evidence?: RagLiveEvidence;
   result: RagProviderToolResult;
+  executionStarted: boolean;
 }
 
 async function executeInvocation(
@@ -182,9 +183,60 @@ async function executeInvocation(
   const startedAt = Date.now();
   const observedAt = new Date().toISOString();
   const callId = proposalCallId(invocation, index);
+  const requestedTool =
+    typeof invocation.tool === 'string' && invocation.tool.trim() !== ''
+      ? invocation.tool
+      : undefined;
   const parsedTool = ragToolNameSchema.safeParse(invocation.tool);
+  const providerError =
+    typeof invocation.errorCode === 'string' && invocation.errorCode.trim() !== ''
+      ? invocation.errorCode
+      : undefined;
+
+  if (providerError === 'UNKNOWN_TOOL' || providerError === 'MALFORMED_ARGUMENTS') {
+    const tool = parsedTool.success ? parsedTool.data : 'INVALID';
+    const call: RagToolCall = {
+      tool,
+      outcome: 'ERROR',
+      as_of: observedAt,
+      returned_count: 0,
+      truncated: false,
+      ...(requestedTool ? { requested_tool: requestedTool } : {}),
+      error_code: providerError,
+    };
+    await auditToolCall({
+      context,
+      tool,
+      authorization: 'DENIED',
+      outcome: call.outcome,
+      errorCode: providerError,
+      asOf: call.as_of,
+      returnedCount: call.returned_count,
+      truncated: call.truncated,
+      durationMs: Date.now() - startedAt,
+    });
+    return {
+      call,
+      result: errorEnvelope(
+        callId,
+        tool,
+        observedAt,
+        'The requested operation is not available.',
+      ),
+      executionStarted: false,
+    };
+  }
 
   if (!parsedTool.success) {
+    const call: RagToolCall = {
+      tool: 'INVALID',
+      outcome: 'ERROR',
+      as_of: observedAt,
+      returned_count: 0,
+      truncated: false,
+      ...(requestedTool ? { requested_tool: requestedTool } : {}),
+      error_code: 'INVALID_TOOL',
+    };
     await auditToolCall({
       context,
       tool: 'INVALID',
@@ -197,12 +249,14 @@ async function executeInvocation(
       durationMs: Date.now() - startedAt,
     });
     return {
+      call,
       result: errorEnvelope(
         callId,
         'INVALID',
         observedAt,
         'The requested operation is not available.',
       ),
+      executionStarted: false,
     };
   }
 
@@ -217,6 +271,7 @@ async function executeInvocation(
       as_of: observedAt,
       returned_count: 0,
       truncated: false,
+      error_code: 'INVALID_ARGUMENTS',
     };
     await auditToolCall({
       context,
@@ -237,6 +292,7 @@ async function executeInvocation(
         observedAt,
         'The requested tool arguments were invalid.',
       ),
+      executionStarted: false,
     };
   }
 
@@ -277,6 +333,7 @@ async function executeInvocation(
         observedAt,
         'The requested operational data is not available to this user.',
       ),
+      executionStarted: false,
     };
   }
 
@@ -284,6 +341,7 @@ async function executeInvocation(
   let call: RagToolCall;
   let evidence: RagLiveEvidence | undefined;
   let toolResult: RagProviderToolResult;
+  const executionStarted = true;
 
   try {
     const result = await runRagTool(ctx, tool, args, authorization);
@@ -303,7 +361,11 @@ async function executeInvocation(
       ...('message' in result ? { message: result.message } : {}),
     };
     if (result.outcome === 'SUCCESS' || result.outcome === 'EMPTY') {
-      evidence = { evidence_type: 'LIVE_OPERATIONAL_DATA', ...call };
+      evidence = {
+        evidence_type: 'LIVE_OPERATIONAL_DATA',
+        ...call,
+        tool: result.tool,
+      };
     }
   } catch {
     errorCode = 'EXECUTION_ERROR';
@@ -344,7 +406,7 @@ async function executeInvocation(
     );
   }
 
-  return { call, evidence, result: toolResult };
+  return { call, evidence, result: toolResult, executionStarted };
 }
 
 export class RagService {
@@ -380,18 +442,24 @@ export class RagService {
       citations: result.citations,
       tool_calls: [],
       rag_version: RAG_VERSION,
+      ...(result.providerStatus
+        ? { provider_status: result.providerStatus }
+        : {}),
     };
 
     const invocations = result.tool_invocations ?? [];
     if (!context || invocations.length === 0 || result.status === 'UNAVAILABLE') {
-      await auditTurn(context, base, startedAt);
+      await auditTurn(context, base, startedAt, {
+        ...(result.providerStatus
+          ? { provider_status: result.providerStatus }
+          : {}),
+      });
       return base;
     }
 
     if (invocations.length > RAG_TOOL_LIMITS.MAX_CALLS_PER_TURN) {
       const response: RagQueryResponse = {
         ...base,
-        rag_version: RAG_VERSION_V2,
       };
       await auditTurn(context, response, startedAt, {
         tool_limit_exceeded: true,
@@ -409,7 +477,6 @@ export class RagService {
     } catch (err) {
       const response: RagQueryResponse = {
         ...base,
-        rag_version: RAG_VERSION_V2,
       };
       await auditTurn(context, response, startedAt, {
         tool_context_error:
@@ -421,6 +488,7 @@ export class RagService {
     const toolCalls: RagToolCall[] = [];
     const liveEvidence: RagLiveEvidence[] = [];
     const toolResults: RagProviderToolResult[] = [];
+    let anyExecutionStarted = false;
 
     for (const [index, invocation] of invocations.entries()) {
       const executed = await executeInvocation(
@@ -429,6 +497,7 @@ export class RagService {
         context,
         index,
       );
+      if (executed.executionStarted) anyExecutionStarted = true;
       toolResults.push(executed.result);
       if (executed.call) toolCalls.push(executed.call);
       if (executed.evidence) liveEvidence.push(executed.evidence);
@@ -477,12 +546,16 @@ export class RagService {
       answer,
       citations,
       tool_calls: toolCalls,
-      rag_version: RAG_VERSION_V2,
+      rag_version: anyExecutionStarted ? RAG_VERSION_V2 : RAG_VERSION,
       ...(hasLiveEvidence ? { live_evidence: liveEvidence } : {}),
+      ...(result.providerStatus
+        ? { provider_status: result.providerStatus }
+        : {}),
     };
 
     await auditTurn(context, response, startedAt, {
       requested_tool_calls: invocations.length,
+      execution_started: anyExecutionStarted,
       continued: Boolean(usableContinuation),
       recursive_tool_calls_ignored: recursiveToolCallsIgnored,
     });

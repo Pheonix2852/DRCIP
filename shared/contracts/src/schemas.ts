@@ -672,16 +672,19 @@ export const ragToolInvocationSchema = z.union([
 
 export const ragToolCallSchema = z
   .object({
-    tool: ragToolNameSchema,
+    tool: z.union([ragToolNameSchema, z.literal('INVALID')]),
     outcome: ragToolOutcomeSchema,
     as_of: z.string().datetime(),
     returned_count: z.number().int().min(0),
     truncated: z.boolean(),
+    requested_tool: z.string().optional(),
+    error_code: z.string().optional(),
   })
   .strict();
 
 export const ragLiveEvidenceSchema = ragToolCallSchema
   .extend({
+    tool: ragToolNameSchema,
     evidence_type: z.literal('LIVE_OPERATIONAL_DATA'),
   })
   .strict();
@@ -742,8 +745,8 @@ export const ragShelterRecordSchema = z
     total_capacity: z.number().int().min(0),
     current_occupancy: z.number().int().min(0),
     available_capacity: z.number().int(),
-    latitude: z.number(),
-    longitude: z.number(),
+    latitude: z.number().nullable(),
+    longitude: z.number().nullable(),
     capabilities: ragCapabilityProfileSchema,
     updated_at: z.string().datetime(),
   })
