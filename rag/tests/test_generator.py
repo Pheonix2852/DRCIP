@@ -338,6 +338,106 @@ class TestPromptGuidance:
         assert "the live result is the only valid source" in prompt
         assert "never substitute a number from a document excerpt" in prompt
 
+    def test_prompts_forbid_exposing_internal_implementation_details(self):
+        system_prompt = " ".join(generator._SYSTEM_PROMPT.lower().split())
+        tool_prompt = " ".join(generator._TOOL_SYSTEM_PROMPT.lower().split())
+        synthesis_prompt = " ".join(
+            generator._SYNTHESIS_SYSTEM_PROMPT.lower().split()
+        )
+
+        assert "do not mention tools, functions" in system_prompt
+        assert "never mention tool or function names" in tool_prompt
+        assert "never mention tools, tool names, function names" in synthesis_prompt
+        assert "backend implementation details" in synthesis_prompt
+        assert "state the relevant as-of time" in synthesis_prompt
+
+    def test_deterministic_summary_uses_user_facing_labels(self):
+        labels = {
+            "get_active_incidents": "Active incidents",
+            "get_nearby_ambulances": "Nearby ambulances",
+            "get_available_rescue_teams": "Available rescue teams",
+            "get_shelter_capacity": "Shelter capacity",
+            "get_resource_stock": "Resource stock",
+            "get_current_assignments": "Current assignments",
+        }
+
+        for tool, label in labels.items():
+            summary = generator.deterministic_summary(
+                [
+                    {
+                        "tool": tool,
+                        "outcome": "SUCCESS",
+                        "as_of": "2026-10-31T00:00:00.000Z",
+                        "returned_count": 1,
+                        "total": 1,
+                        "truncated": False,
+                    }
+                ]
+            )
+            assert label in summary
+            assert tool not in summary
+
+    def test_deterministic_summary_preserves_counts_and_observation_time(self):
+        summary = generator.deterministic_summary(
+            [
+                {
+                    "tool": "get_active_incidents",
+                    "outcome": "SUCCESS",
+                    "as_of": "2026-10-31T00:00:00.000Z",
+                    "returned_count": 10,
+                    "total": 35,
+                    "truncated": True,
+                }
+            ]
+        )
+
+        assert "showing 10 of 35" in summary.lower()
+        assert "2026-10-31T00:00:00.000Z" in summary
+        assert "get_active_incidents" not in summary
+
+    def test_synthesis_payload_hides_internal_tool_identifiers(self):
+        client = MagicMock()
+        client.chat.completions.create.return_value = _response(_choice("Answer."))
+        labels = {
+            "get_active_incidents": "Active incidents",
+            "get_nearby_ambulances": "Nearby ambulances",
+            "get_available_rescue_teams": "Available rescue teams",
+            "get_shelter_capacity": "Shelter capacity",
+            "get_resource_stock": "Resource stock",
+            "get_current_assignments": "Current assignments",
+        }
+        tool_results = [
+            {
+                "call_id": f"call_{index}",
+                "tool": tool,
+                "outcome": "SUCCESS",
+                "as_of": "2026-10-31T00:00:00.000Z",
+                "returned_count": 1,
+                "total": 1,
+                "truncated": False,
+                "records": [],
+            }
+            for index, tool in enumerate(labels, start=1)
+        ]
+
+        generator.synthesize(
+            client=client,
+            model="test-model",
+            question="What is the current status?",
+            chunks=[],
+            tool_results=tool_results,
+        )
+
+        messages = client.chat.completions.create.call_args.kwargs["messages"]
+        user_content = messages[1]["content"]
+        assert '"data_source"' in user_content
+        assert '"call_id"' not in user_content
+        assert '"requested_tool"' not in user_content
+        assert '"error_code"' not in user_content
+        for tool, label in labels.items():
+            assert tool not in user_content
+            assert label in user_content
+
 
 class TestToolCallFinishHandling:
     schema = {

@@ -909,6 +909,31 @@ describe('RAG tool continuation', () => {
     });
   });
 
+  it('does not return pre-tool status text when continuation is unavailable', async () => {
+    const coordinator = await createAuthedUser('DISASTER_COORDINATOR');
+    await createShelter({ name: 'Pre-tool Status Shelter' });
+    const service = new RagService({
+      query: vi.fn().mockResolvedValue({
+        status: 'ABSTAINED',
+        answer: 'I will call get_shelter_capacity to check.',
+        citations: [],
+        tool_invocations: [
+          { tool: 'get_shelter_capacity', arguments: { limit: 10 } },
+        ],
+      }),
+    });
+
+    const result = await service.query('Shelters?', {
+      userId: coordinator.user.id,
+      userRole: 'DISASTER_COORDINATOR',
+      requestId: 'req-rag-pretool-status',
+    });
+
+    expect(result.answer).toContain('Live operational data was retrieved');
+    expect(result.answer).not.toContain('get_shelter_capacity');
+    expect(result.live_evidence).toHaveLength(1);
+  });
+
   it('falls back to live evidence when continuation synthesis fails', async () => {
     const coordinator = await createAuthedUser('DISASTER_COORDINATOR');
     await createShelter({ name: 'Fallback Shelter' });

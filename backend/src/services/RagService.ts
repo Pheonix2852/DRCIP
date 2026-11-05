@@ -529,7 +529,7 @@ export class RagService {
     const answer =
       continuationAnswer.length > 0
         ? usableContinuation!.answer
-        : hasLiveEvidence && base.answer.trim().length === 0
+        : hasLiveEvidence
           ? 'Live operational data was retrieved, but a summary could not be generated. Review the live evidence below.'
           : base.answer;
     const citations = usableContinuation

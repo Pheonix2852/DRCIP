@@ -7,6 +7,7 @@ import { PageHeader } from '../components/PageHeader'
 import { LoadingState } from '../components/LoadingState'
 import { ErrorState } from '../components/ErrorState'
 import { EmptyState } from '../components/EmptyState'
+import { MarkdownContent } from '../components/MarkdownContent'
 import { StatusBadge } from '../components/StatusBadge'
 import { UnavailableState } from '../components/UnavailableState'
 import { Button } from './ui/button'
@@ -57,7 +58,7 @@ const TOOL_LABELS: Record<string, string> = {
 }
 
 function toolLabel(tool: string): string {
-  return TOOL_LABELS[tool] ?? tool
+  return TOOL_LABELS[tool] ?? 'Live operational data'
 }
 
 function evidenceKey(call: RagToolCall): string {
@@ -152,7 +153,7 @@ function RagResponse({
             : 'Insufficient evidence in the approved knowledge base'
           : 'Answer supported by approved sources'}
       </p>
-      <p className="mt-2 whitespace-pre-wrap text-sm text-ink">{response.answer}</p>
+      <MarkdownContent content={response.answer} className="mt-2" />
       {!abstained && <Citations citations={response.citations} />}
       <LiveEvidence response={response} />
     </div>

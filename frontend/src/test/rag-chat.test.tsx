@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, cleanup, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import type { RagQueryResponse, RagToolCall } from '@drcip/contracts'
+import type { RagLiveEvidence, RagQueryResponse } from '@drcip/contracts'
 
 vi.mock('../lib/rag', () => ({
   rag: { query: vi.fn() },
@@ -41,7 +41,8 @@ const unavailable: RagQueryResponse = {
   rag_version: 'rag-v1',
 }
 
-const shelterCall: RagToolCall = {
+const shelterCall: RagLiveEvidence = {
+  evidence_type: 'LIVE_OPERATIONAL_DATA',
   tool: 'get_shelter_capacity',
   outcome: 'SUCCESS',
   as_of: '2026-01-01T10:00:00.000Z',
@@ -55,10 +56,11 @@ const liveOnly: RagQueryResponse = {
   citations: [],
   tool_calls: [shelterCall],
   rag_version: 'rag-v2',
-  live_evidence: [{ evidence_type: 'LIVE_OPERATIONAL_DATA', ...shelterCall }],
+  live_evidence: [shelterCall],
 }
 
-const emptyCall: RagToolCall = {
+const emptyCall: RagLiveEvidence = {
+  evidence_type: 'LIVE_OPERATIONAL_DATA',
   tool: 'get_nearby_ambulances',
   outcome: 'EMPTY',
   as_of: '2026-01-01T10:05:00.000Z',
@@ -66,7 +68,8 @@ const emptyCall: RagToolCall = {
   truncated: false,
 }
 
-const unavailableCall: RagToolCall = {
+const unavailableCall: RagLiveEvidence = {
+  evidence_type: 'LIVE_OPERATIONAL_DATA',
   tool: 'get_resource_stock',
   outcome: 'UNAVAILABLE',
   as_of: '2026-01-01T10:06:00.000Z',
@@ -74,7 +77,8 @@ const unavailableCall: RagToolCall = {
   truncated: false,
 }
 
-const errorCall: RagToolCall = {
+const errorCall: RagLiveEvidence = {
+  evidence_type: 'LIVE_OPERATIONAL_DATA',
   tool: 'get_current_assignments',
   outcome: 'ERROR',
   as_of: '2026-01-01T10:07:00.000Z',
@@ -82,7 +86,8 @@ const errorCall: RagToolCall = {
   truncated: false,
 }
 
-const truncatedCall: RagToolCall = {
+const truncatedCall: RagLiveEvidence = {
+  evidence_type: 'LIVE_OPERATIONAL_DATA',
   tool: 'get_active_incidents',
   outcome: 'SUCCESS',
   as_of: '2026-01-01T10:08:00.000Z',
@@ -96,10 +101,7 @@ const mixed: RagQueryResponse = {
   citations: grounded.citations,
   tool_calls: [shelterCall, emptyCall],
   rag_version: 'rag-v2',
-  live_evidence: [
-    { evidence_type: 'LIVE_OPERATIONAL_DATA', ...shelterCall },
-    { evidence_type: 'LIVE_OPERATIONAL_DATA', ...emptyCall },
-  ],
+  live_evidence: [shelterCall, emptyCall],
 }
 
 const degradedTools: RagQueryResponse = {
@@ -176,6 +178,70 @@ describe('RAGChatPage', () => {
     expect(screen.queryByText(/excerpt/i)).toBeNull()
   })
 
+  it('renders Markdown structure, tables, code, and safe links', async () => {
+    vi.mocked(rag.query).mockResolvedValue({
+      status: 'GROUNDED',
+      answer: [
+        '## Shelter status',
+        '',
+        '**Two shelters** are open.',
+        '',
+        '- Alpha',
+        '- Beta',
+        '',
+        '| Shelter | Capacity |',
+        '| --- | --- |',
+        '| Alpha | 40 |',
+        '',
+        'Use `inline` code and [guidance](https://example.com).',
+      ].join('\n'),
+      citations: [],
+      tool_calls: [],
+      rag_version: 'rag-v1',
+    })
+    renderPage()
+    ask('Which shelters are open?')
+
+    expect(
+      await screen.findByRole('heading', { name: 'Shelter status', level: 2 }),
+    ).toBeTruthy()
+    expect(screen.getByText('Two shelters')).toBeTruthy()
+    const list = screen.getByRole('list')
+    expect(within(list).getByText('Alpha')).toBeTruthy()
+    expect(within(list).getByText('Beta')).toBeTruthy()
+
+    const table = screen.getByRole('table')
+    expect(table.parentElement?.className).toContain('overflow-x-auto')
+    expect(within(table).getByRole('columnheader', { name: 'Shelter' })).toBeTruthy()
+    expect(within(table).getByRole('cell', { name: '40' })).toBeTruthy()
+
+    expect(screen.getByText('inline').closest('code')).not.toBeNull()
+    const link = screen.getByRole('link', { name: 'guidance' })
+    expect(link.getAttribute('href')).toBe('https://example.com')
+    expect(link.getAttribute('target')).toBe('_blank')
+    expect(link.getAttribute('rel')).toBe('noopener noreferrer')
+  })
+
+  it('does not render raw HTML or unsafe links from model output', async () => {
+    vi.mocked(rag.query).mockResolvedValue({
+      status: 'GROUNDED',
+      answer:
+        'Hello <script>alert("x")</script> <img src="x" onerror="alert(1)"> [unsafe](javascript:alert(1))',
+      citations: [],
+      tool_calls: [],
+      rag_version: 'rag-v1',
+    })
+    const { container } = renderPage()
+    ask('What should the field team check?')
+
+    await screen.findByTestId('rag-response')
+    expect(container.querySelector('script')).toBeNull()
+    expect(container.querySelector('img')).toBeNull()
+    expect(container.querySelector('[onerror]')).toBeNull()
+    const link = screen.getByRole('link', { name: 'unsafe' })
+    expect(link.getAttribute('href')).not.toContain('javascript:')
+  })
+
   it('renders abstention as insufficient evidence, not an ordinary answer', async () => {
     vi.mocked(rag.query).mockResolvedValue(abstained)
     renderPage()
@@ -231,7 +297,7 @@ describe('RAGChatPage', () => {
       citations: [],
       tool_calls: [emptyCall],
       rag_version: 'rag-v2',
-      live_evidence: [{ evidence_type: 'LIVE_OPERATIONAL_DATA', ...emptyCall }],
+      live_evidence: [emptyCall],
     })
     renderPage()
     ask('Are there ambulances nearby?')
@@ -257,7 +323,7 @@ describe('RAGChatPage', () => {
       citations: [],
       tool_calls: [truncatedCall],
       rag_version: 'rag-v2',
-      live_evidence: [{ evidence_type: 'LIVE_OPERATIONAL_DATA', ...truncatedCall }],
+      live_evidence: [truncatedCall],
     })
     const { container } = renderPage()
     ask('Which incidents are active?')
