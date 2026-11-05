@@ -13,7 +13,6 @@ export default defineConfig({
     env: {
       DATABASE_URL: testUrl,
       JWT_SECRET: 'test-jwt-secret-key',
-      JWT_EXPIRES_IN: '3600',
       NODE_ENV: 'test',
     },
   },

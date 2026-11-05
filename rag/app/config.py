@@ -5,7 +5,6 @@ All secrets come from the environment; this file never contains real values.
 from __future__ import annotations
 
 from functools import cached_property
-from typing import Optional
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -22,9 +21,6 @@ class Settings(BaseSettings):
     groq_model: str = "openai/gpt-oss-20b"
     top_k: int = 5
     score_threshold: float = 0.30  # cosine similarity floor for abstention
-
-    # ── Future use (Neon PostgreSQL) ──────────────────────────────────────────
-    database_url: Optional[str] = None
 
     model_config = SettingsConfigDict(
         env_file=".env",

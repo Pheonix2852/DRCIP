@@ -15,13 +15,30 @@ does not load PyTorch, Transformers, or a local model.
 Developer machine (local, run once)
   disaster.pdf -> ingest.py -> Cloudflare Workers AI embeddings -> Qdrant Cloud
 
+DRCIP Node backend (public API + orchestration)
+  POST /api/v1/rag/query
+    1. Supply approved tool definitions (Citizen receives none)
+    2. Call this service's POST /query
+    3. If the service proposes tool calls, validate, authorize, execute and audit them
+    4. Send the tool results back for final synthesis
+    5. Return the rag-v1/rag-v2 response to the UI
+
 Render Docker service
   POST /query
-    1. Embed question   (Cloudflare Workers AI, BGE-small-en-v1.5)
-    2. Vector search    (Qdrant Cloud, canonical disaster_docs, cosine)
-    3. Threshold check  (abstain when similarity is low)
-    4. Generate answer  (Groq LLM)
-    5. Return answer + page citations
+    Document path:
+      1. Embed question   (Cloudflare Workers AI, BGE-small-en-v1.5)
+      2. Vector search    (Qdrant Cloud, canonical disaster_docs, cosine)
+      3. Threshold check  (abstain when similarity is low)
+      4. Generate answer  (Groq LLM)
+      5. Return answer + page citations
+    Tool-proposal path:
+      1. Retrieve document context
+      2. Ask Groq for either a grounded document answer or structured tool calls
+      3. Return proposals; Python never executes them
+    Continuation path:
+      1. Accept Node-executed tool results
+      2. Synthesize documents + live operational data
+      3. Return answer, citations and evidence metadata
 ```
 
 | Component | Technology |
@@ -31,6 +48,7 @@ Render Docker service
 | LLM | Groq (`openai/gpt-oss-20b`) |
 | Vector DB | Qdrant Cloud, collection `disaster_docs` |
 | PDF parsing | pypdf |
+| Orchestration | DRCIP Node backend (RBAC, tool execution, audit) |
 | Deployment | Render (Docker) |
 
 ---
@@ -74,10 +92,14 @@ dimensions, L2-normalized, COSINE distance.
 ### 4. Run the API locally
 
 ```bash
-uvicorn app.main:app --reload --port 8000
+uvicorn app.main:app --reload --port 8001
 ```
 
-Open `http://localhost:8000/docs` for the interactive Swagger UI.
+Use port `8000` only when the optional `intelligence-service` is not running;
+otherwise the two local services conflict. Point the backend at the chosen port
+with `RAG_SERVICE_URL` and set a matching `RAG_API_KEY`.
+
+Open `http://localhost:8001/docs` for the interactive Swagger UI.
 
 ---
 
@@ -117,6 +139,8 @@ API keys are set in `API_KEYS` (comma-separated for rotation).
 | Field | Type | Required | Constraints |
 |---|---|---|---|
 | `question` | string | yes | 3-500 characters |
+| `tools` | array | no | Approved tool definitions supplied by the Node backend; max 10 |
+| `tool_results` | array | no | Node-executed results for continuation and synthesis |
 
 **Response - answer found (HTTP 200):**
 
@@ -135,6 +159,30 @@ API keys are set in `API_KEYS` (comma-separated for rotation).
 }
 ```
 
+**Response - tool proposals (HTTP 200):**
+
+```json
+{
+  "answer": "",
+  "sources": [],
+  "model": "openai/gpt-oss-20b",
+  "chunks_retrieved": 3,
+  "tool_calls": [
+    {
+      "id": "call_1",
+      "name": "get_active_incidents",
+      "arguments": { "severity": "CRITICAL", "limit": 10 }
+    }
+  ]
+}
+```
+
+`tool_calls` are proposals only. The Node backend validates the tool name and
+arguments, enforces RBAC, executes the tool, audits the call, and sends the
+results back in `tool_results` for final synthesis. If the provider rejects a
+tool call, the response includes `provider_status: "TOOL_CALL_REJECTED"` and no
+`tool_calls`.
+
 **Response - abstention (HTTP 200):**
 
 ```json
@@ -146,13 +194,51 @@ API keys are set in `API_KEYS` (comma-separated for rotation).
 }
 ```
 
-Check `sources == []` to detect abstention programmatically.
+For document-only answers, `sources == []` indicates abstention. If `tool_calls`
+or `provider_status` is present, the response is part of a RAG 2.0 tool round,
+not a document-only abstention.
 
 | HTTP | Condition |
 |---|---|
 | 401 | Invalid or missing bearer token |
 | 422 | Request body fails validation |
 | 503 | Qdrant, Cloudflare, or Groq unavailable |
+
+---
+
+## RAG 2.0 Live Tool Calls
+
+The DRCIP Node backend is the only RAG 2.0 orchestrator. It supplies an
+allowlisted set of tool definitions to this service. Citizens receive no tool
+definitions, so their turns stay on the document-only path.
+
+The service may return `tool_calls` proposals, but it never executes them. For
+each proposal the Node backend:
+
+1. validates the tool name and typed arguments against the shared contracts;
+2. enforces the role allowlist server-side;
+3. executes the tool through application/domain services;
+4. writes an audit record; and
+5. sends the structured `tool_results` back for a continuation request.
+
+Tool execution is single-round and capped at four calls per turn. Only
+`SUCCESS` and `EMPTY` results become live evidence. `UNAVAILABLE` and `ERROR`
+results degrade to an explicit limitation message rather than being presented
+as current data.
+
+Available tools:
+
+- `get_active_incidents`
+- `get_nearby_ambulances`
+- `get_available_rescue_teams`
+- `get_shelter_capacity`
+- `get_resource_stock`
+- `get_current_assignments`
+
+`get_resource_stock` is restricted to coordinators and administrators; the
+other tools are available to field officers, coordinators, and administrators.
+The Node backend labels the final response `rag-v1` for document-only turns and
+`rag-v2` when a tool execution occurred.
 
 ---
 
@@ -195,15 +281,14 @@ availability. There is no local-model status field.
 | `GROQ_MODEL` | no | `openai/gpt-oss-20b` | Groq model ID |
 | `TOP_K` | no | `5` | Chunks retrieved per query |
 | `SCORE_THRESHOLD` | no | `0.30` | Minimum cosine similarity before abstention |
-| `DATABASE_URL` | no | - | Reserved for future use |
 
 ---
 
 ## Running Tests
 
 ```bash
-pytest tests/ -v
-ruff check app tests ingest
+python -m pytest tests/ -v
+python -m ruff check app tests ingest
 ```
 
 Tests run offline; Qdrant, Groq, and Cloudflare Workers AI are mocked.
@@ -268,6 +353,8 @@ do not delete the only validated copy.
 
 - Bearer tokens are validated server-side against `API_KEYS`.
 - The LLM system prompt contains injection-resistance instructions.
+- Tool definitions are supplied by the Node backend; this service never
+  executes a proposed tool.
 - HTTPS is terminated by Render's proxy.
 - Never commit `.env`; it is ignored by git.
 - Do not log Cloudflare or Qdrant credentials.

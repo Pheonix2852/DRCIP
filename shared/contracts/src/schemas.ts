@@ -544,7 +544,7 @@ export const ragQuerySchema = z
 export type RagQueryInput = z.infer<typeof ragQuerySchema>;
 
 // ---------------------------------------------------------------------------
-// RAG 2.0 live-tool contract (frozen; tools are not implemented in v1)
+// RAG 2.0 live-tool contract (implemented; Node executes proposals)
 // See docs/05_API_Contract.md #14 and docs/02_Functional_Specification.md #12
 // ---------------------------------------------------------------------------
 
